@@ -4,6 +4,8 @@
 import subprocess
 
 import os
+
+import re
 import shutil
 import warnings
 import numpy as np
@@ -34,11 +36,11 @@ yaml.add_representer(
 )
 
 # matplotlib
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-from matplotlib.colors import LogNorm
 from matplotlib.colors import PowerNorm
+
+from matplotlib.patches import Ellipse
 
 # pathlib
 from pathlib import Path
@@ -46,7 +48,8 @@ from pathlib import Path
 # astropy
 from astropy.io import fits
 from astropy.constants import c
-import astropy.units as units
+
+from astropy.io import fits
 
 # pyvisgen
 from pyvisgen.simulation.visibility import vis_loop
@@ -55,7 +58,6 @@ import pyvisgen.fits.writer as writer
 
 
 # radiotools
-from radiotools.layouts import Layout
 from radiotools.visibility import SourceVisibility
 
 from radiotools.measurements import Measurement
@@ -65,8 +67,9 @@ from radiotools.gridding import Gridder
 from radio_stats.cuts.dyn_range import rms_cut
 from radio_stats.cuts.dbscan_clean import dbscan_clean
 
-# casatasks
+# casa
 from casatasks import simobserve, simanalyze
+from casatools.table import table
 
 
 class Simulation:
@@ -100,6 +103,7 @@ class Simulation:
         if obs_date is None:
             obs_date = self.metadata["obs_date"]
 
+        self.observatory = observatory
         self._src_vis = SourceVisibility(
             (self.metadata["src_ra"], self.metadata["src_dec"]),
             obs_date,
@@ -120,12 +124,13 @@ class Simulation:
     def save_configs(self):
         config = {
             "project_name": self.project_name,
-            "Skymodel": {
+            "skymodel": {
                 "source": self.skymodel.name,
                 "path": self.skymodel.cleaned_path,
                 "metadata": self.skymodel.get_metadata(),
             },
             "observation_params": {
+                "observatory": self.observatory,
                 "obs_time": self._src_vis.get_optimal_date()[0],
                 "fov_multiplier": self.fov_multiplier,
                 "scan_duration": self.scan_duration,
@@ -250,7 +255,7 @@ class Simulation:
         ms_name = (
             "pyvisgen.ms"
             if software == "pyvisgen"
-            else f"casa.{self.casa_conf['array_layout']}.ms"
+            else f"casa.{self.config_casa['array_layout']}.ms"
         )
         print(f"|--- WSClean Run 1 of {self.skymodel.name} for {software} ---|")
 
@@ -299,12 +304,25 @@ class Simulation:
         subprocess.run(cmd, shell=True)
 
     def tclean(self, software, niter=10000, overwrite=False):
-        self._ch_projectdir()
-
         if software not in ("casa", "pyvisgen"):
             raise KeyError(
                 f"The software {software} does not exist! Use (casa or pyvisgen)!"
             )
+
+        self._ch_projectdir()
+
+        if overwrite:
+            excluded_dir_suffices = ["ms", "skymodel"]
+            dirs = [
+                x
+                for x in Path(".").glob("*.*")
+                if x.is_dir()
+                and str(x).split(".")[-1] not in excluded_dir_suffices
+                and str(x).split(".")[-1] not in excluded_dir_suffices
+                and (str(x).split("/")[-1].split(".")[0] == "software")
+            ]
+            for dirx in dirs:
+                shutil.rmtree(dirx)
 
         if software == "pyvisgen":
             measurement = Measurement.from_fits(
@@ -333,6 +351,132 @@ class Simulation:
         )
 
         self._ch_parentdir()
+
+    def plot_tclean_result(
+        self,
+        software,
+        cut_negative_flux=False,
+        show_beam=True,
+        save_to=None,
+        save_args={},
+        plot_args={"cmap": "inferno", "norm": PowerNorm(gamma=0.5)},
+        fig=None,
+        ax=None,
+    ):
+        if None in (fig, ax) and not all(x is None for x in (fig, ax)):
+            raise KeyError(
+                "The parameters ax and fig have to be both None or not None!"
+            )
+
+        if ax is None:
+            fig, ax = plt.subplots(layout="constrained")
+
+        img_path = f"{self._project_dir}/{software}/"
+        beam_path = img_path
+
+        match software:
+            case "pyvisgen":
+                img_path += "pyvisgen.image/"
+                beam_path += "pyvisgen.psf/"
+            case "casa":
+                img_path += f"casa.{self.config_casa['array_layout']}.image/"
+                beam_path += f"casa.{self.config_casa['array_layout']}.psf/"
+
+        img = table(img_path).getcol("map")[:, :, 0, 0, 0]
+
+        if show_beam:
+            beam = table(beam_path)
+            beam_desc = beam.getdesc()["_keywords_"]["imageinfo"]["restoringbeam"]
+            beam_info = {
+                "bmin": beam_desc["minor"]["value"],
+                "bmaj": beam_desc["major"]["value"],
+                "bpa": beam_desc["positionangle"]["value"],
+            }
+
+            img_size = self.skymodel.get_metadata()["img_size"]
+            cell_size = self.skymodel.get_metadata()["cell_size"]
+
+            ax.add_patch(
+                Ellipse(
+                    (int(img_size / 10), int(img_size / 10)),
+                    width=beam_info["bmin"] / cell_size,
+                    height=beam_info["bmaj"] / cell_size,
+                    angle=beam_info["bpa"] / cell_size,
+                    facecolor="white",
+                )
+            )
+
+        if cut_negative_flux:
+            img[img < 0] = 0
+
+        im = ax.imshow(img, origin="lower", **plot_args)
+        ax.set_ylabel("Pixel")
+        ax.set_xlabel("Pixel")
+        fig.colorbar(im, ax=ax, label="Flussdichte in Jy/beam")
+
+        if save_to is not None:
+            fig.savefig(save_to, **save_args)
+
+        return fig, ax
+
+    def plot_wsclean_result(
+        self,
+        software,
+        cut_negative_flux=False,
+        show_beam=True,
+        save_to=None,
+        save_args={},
+        plot_args={"cmap": "inferno", "norm": PowerNorm(gamma=0.5)},
+        fig=None,
+        ax=None,
+    ):
+        if None in (fig, ax) and not all(x is None for x in (fig, ax)):
+            raise KeyError(
+                "The parameters ax and fig have to be both None or not None!"
+            )
+
+        if ax is None:
+            fig, ax = plt.subplots(layout="constrained")
+
+        img_path = f"{self._project_dir}/{software}/{software}.fits-image.fits"
+        beam_path = f"{self._project_dir}/{software}/{software}.fits-psf.fits"
+
+        img = fits.open(img_path)[0].data[0, 0]
+
+        if show_beam:
+            beam = fits.open(beam_path)[0]
+            header = beam.header
+            beam_info = {
+                "bmin": header["BMIN"] * 3600,
+                "bmaj": header["BMAJ"] * 3600,
+                "bpa": header["BPA"],
+            }
+
+            img_size = self.skymodel.get_metadata()["img_size"]
+            cell_size = self.skymodel.get_metadata()["cell_size"]
+
+            ax.add_patch(
+                Ellipse(
+                    (int(img_size / 10), int(img_size / 10)),
+                    width=beam_info["bmin"] / cell_size,
+                    height=beam_info["bmaj"] / cell_size,
+                    angle=beam_info["bpa"],
+                    facecolor="white",
+                )
+            )
+
+        if cut_negative_flux:
+            img[img < 0] = 0
+
+        im = ax.imshow(np.fliplr(np.rot90(img, 1)), origin="lower", **plot_args)
+        ax.set_ylabel("Pixel")
+        ax.set_xlabel("Pixel")
+        fig.colorbar(im, ax=ax, label="Flussdichte in Jy/beam")
+
+        if save_to is not None:
+            fig.savefig(save_to, **save_args)
+
+        return fig, ax
 
     def _simulate_casa(self):
         self._ch_projectdir()
@@ -428,10 +572,12 @@ class Simulation:
         if not config_dir.is_dir():
             raise FileNotFoundError("No configs found to load!")
 
-        with open(f"{config_dir}/{cls.project_name}_casa_conf.yml", "w") as file:
+        project_name = project_path.split("/")[-1]
+
+        with open(f"{config_dir}/{project_name}_casa_conf.yml", "r") as file:
             casa_config = yaml.safe_load(file)
 
-        with open(f"{config_dir}/{cls.project_name}_pyvisgen_conf.yml", "w") as file:
+        with open(f"{config_dir}/{project_name}_pyvisgen_conf.yml", "r") as file:
             pyvisgen_config = yaml.safe_load(file)
 
         skymodel = Skymodel(
@@ -441,7 +587,7 @@ class Simulation:
         )
 
         cls = cls(
-            project_path.split("/")[-1],
+            project_name,
             skymodel,
             casa_config["observation_params"]["scan_duration"],
             casa_config["observation_params"]["integration_time"],
@@ -477,6 +623,11 @@ class Skymodel:
             "src_ra": header["CRVAL1"],
             "src_dec": f.header["CRVAL2"],
             "obs_date": f.header["DATE-OBS"].split("T")[0],
+            "beam": {
+                "bmin": header["BMIN"] * 3600,
+                "bmaj": header["BMAJ"] * 3600,
+                "bpa": header["BPA"],
+            },
         }
 
     def get_info(self):
@@ -535,6 +686,7 @@ class Skymodel:
         colorbar_shrink=1,
         save_to=None,
         save_args={},
+        show_beam=True,
         fig=None,
         ax=None,
     ):
@@ -549,6 +701,22 @@ class Skymodel:
             fig, ax = plt.subplots()
 
         im = ax.imshow(skymodel, norm=PowerNorm(gamma=exp), **plot_args, origin="lower")
+
+        if show_beam:
+            beam_info = self.get_metadata()["beam"]
+            img_size = self.get_metadata()["img_size"]
+            cell_size = self.get_metadata()["cell_size"]
+
+            ax.add_patch(
+                Ellipse(
+                    (int(img_size / 10), int(img_size / 10)),
+                    width=beam_info["bmin"] / cell_size,
+                    height=beam_info["bmaj"] / cell_size,
+                    angle=beam_info["bpa"],
+                    facecolor="white",
+                )
+            )
+
         ax.set_xlabel("Pixel")
         ax.set_ylabel("Pixel")
 
@@ -570,6 +738,7 @@ class Skymodel:
         colorbar_shrink=1,
         save_to=None,
         save_args={},
+        show_beam=True,
         fig=None,
         ax=None,
     ):
@@ -584,6 +753,22 @@ class Skymodel:
             fig, ax = plt.subplots()
 
         im = ax.imshow(skymodel, norm=PowerNorm(gamma=exp), **plot_args, origin="lower")
+
+        if show_beam:
+            beam_info = self.get_metadata()["beam"]
+            img_size = skymodel.shape[0]
+            cell_size = self.get_metadata()["cell_size"]
+
+            ax.add_patch(
+                Ellipse(
+                    (int(img_size / 10), int(img_size / 10)),
+                    width=beam_info["bmin"] / cell_size,
+                    height=beam_info["bmaj"] / cell_size,
+                    angle=beam_info["bpa"],
+                    facecolor="white",
+                )
+            )
+
         ax.set_xlabel("Pixel")
         ax.set_ylabel("Pixel")
 
