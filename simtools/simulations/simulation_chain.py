@@ -240,6 +240,8 @@ class Simulation:
                 f"The software {software} does not exist! Use (casa or pyvisgen)!"
             )
 
+        niter_dict = {"run1": niter[0], "run2": niter[1]}
+
         if software == "pyvisgen":
             measurement = Measurement.from_fits(
                 f"{self._project_dir}/pyvisgen/{self.project_name}.fits"
@@ -247,9 +249,9 @@ class Simulation:
             measurement.save_as_ms(
                 f"{self._project_dir}/pyvisgen/pyvisgen.ms", overwrite=True
             )
-            self.config_pyvisgen["wsclean_niter"] = niter
+            self.config_pyvisgen["wsclean_niter"] = niter_dict
         else:
-            self.config_casa["wsclean_niter"] = niter
+            self.config_casa["wsclean_niter"] = niter_dict
 
         ms_name = (
             "pyvisgen.ms"
@@ -314,12 +316,12 @@ class Simulation:
             excluded_dir_suffices = ["ms", "skymodel"]
             dirs = [
                 x
-                for x in Path(".").glob("*.*")
+                for x in Path(f"./{software}").glob("*.*")
                 if x.is_dir()
                 and str(x).split(".")[-1] not in excluded_dir_suffices
-                and str(x).split(".")[-1] not in excluded_dir_suffices
-                and (str(x).split("/")[-1].split(".")[0] == "software")
+                and (str(x).split("/")[-1].split(".")[0] == software)
             ]
+
             for dirx in dirs:
                 shutil.rmtree(dirx)
 
@@ -684,7 +686,10 @@ class Simulation:
                         axis.axis("off")
 
             if archive:
-                fig.savefig(f"{str(archive_path)}/{software}.pdf", **save_args)
+                fig.savefig(
+                    f"{str(archive_path)}/{self.skymodel.name}_{software}_results.pdf",
+                    **save_args,
+                )
 
         if archive and compress:
             shutil.rmtree(archive_path / ".ipynb_checkpoints")
