@@ -121,7 +121,7 @@ class Simulation:
     def _ch_projectdir(self):
         os.chdir(self._project_dir)
 
-    def save_configs(self):
+    def get_config(self, software):
         config = {
             "project_name": self.project_name,
             "skymodel": {
@@ -138,6 +138,21 @@ class Simulation:
             },
         }
 
+        match software:
+            case "pyvisgen":
+                pyvisgen_conf = self.config_pyvisgen
+                return config | {
+                    "pyvisgen_params": pyvisgen_conf
+                    if pyvisgen_conf is not None
+                    else {}
+                }
+            case "casa":
+                casa_conf = self.config_casa
+                return config | {
+                    "casa_params": casa_conf if casa_conf is not None else {}
+                }
+
+    def save_configs(self):
         config_dir = Path(f"{self._project_dir}/configs")
 
         if not config_dir.is_dir():
@@ -146,35 +161,16 @@ class Simulation:
         with open(
             f"{config_dir}/{self.project_name}_pyvisgen_conf.yml", "w"
         ) as outfile:
-            pyvisgen_conf = self.config_pyvisgen
-
-            # if pyvisgen_conf is not None:
-            #     pyvisgen_conf = pyvisgen_conf.copy()
-            #     pyvisgen_conf.pop("device", None)
-            #     pyvisgen_conf.pop("overwrite", None)
-            #     pyvisgen_conf.pop("show_progress", None)
-
             yaml.dump(
-                config
-                | {
-                    "pyvisgen_params": pyvisgen_conf
-                    if pyvisgen_conf is not None
-                    else {}
-                },
+                self.get_config("pyvisgen"),
                 outfile,
                 default_flow_style=False,
                 sort_keys=False,
             )
 
         with open(f"{config_dir}/{self.project_name}_casa_conf.yml", "w") as outfile:
-            casa_conf = self.config_casa
-
-            # if casa_conf is not None:
-            #     casa_conf = casa_conf.copy()
-            #     casa_conf.pop("overwrite", None)
-
             yaml.dump(
-                config | {"casa_params": casa_conf if casa_conf is not None else {}},
+                self.get_config("casa"),
                 outfile,
                 default_flow_style=False,
                 sort_keys=False,
@@ -251,6 +247,9 @@ class Simulation:
             measurement.save_as_ms(
                 f"{self._project_dir}/pyvisgen/pyvisgen.ms", overwrite=True
             )
+            self.config_pyvisgen["wsclean_niter"] = niter
+        else:
+            self.config_casa["wsclean_niter"] = niter
 
         ms_name = (
             "pyvisgen.ms"
@@ -339,6 +338,9 @@ class Simulation:
                     str(casa_skymodel),
                     f"{self._project_dir}/pyvisgen/pyvisgen.skymodel",
                 )
+            self.config_pyvisgen["tclean_niter"] = niter
+        else:
+            self.config_casa["tclean_niter"] = niter
 
         print(f"|--- tclean of {self.skymodel.name} for {software} ---|")
         simanalyze(
@@ -360,6 +362,7 @@ class Simulation:
         save_to=None,
         save_args={},
         plot_args={"cmap": "inferno", "norm": PowerNorm(gamma=0.5)},
+        colorbar_shrink=1,
         fig=None,
         ax=None,
     ):
@@ -412,7 +415,7 @@ class Simulation:
         im = ax.imshow(img, origin="lower", **plot_args)
         ax.set_ylabel("Pixel")
         ax.set_xlabel("Pixel")
-        fig.colorbar(im, ax=ax, label="Flussdichte in Jy/beam")
+        fig.colorbar(im, ax=ax, label="Flussdichte in Jy/beam", shrink=colorbar_shrink)
 
         if save_to is not None:
             fig.savefig(save_to, **save_args)
@@ -427,6 +430,7 @@ class Simulation:
         save_to=None,
         save_args={},
         plot_args={"cmap": "inferno", "norm": PowerNorm(gamma=0.5)},
+        colorbar_shrink=1,
         fig=None,
         ax=None,
     ):
@@ -471,7 +475,7 @@ class Simulation:
         im = ax.imshow(np.fliplr(np.rot90(img, 1)), origin="lower", **plot_args)
         ax.set_ylabel("Pixel")
         ax.set_xlabel("Pixel")
-        fig.colorbar(im, ax=ax, label="Flussdichte in Jy/beam")
+        fig.colorbar(im, ax=ax, label="Flussdichte in Jy/beam", shrink=colorbar_shrink)
 
         if save_to is not None:
             fig.savefig(save_to, **save_args)
@@ -564,6 +568,133 @@ class Simulation:
                     img_size=self.metadata["img_size"],
                     fov=self.metadata["fov"] * self.fov_multiplier,
                 )
+
+    def export_results(
+        self,
+        archive=False,
+        compress=False,
+        keep_directory=False,
+        save_args={},
+        softwares=["pyvisgen", "casa"],
+    ):
+        def plot_text(
+            text,
+            ax,
+            pos=(0, 1),
+            text_options={"fontsize": 12, "fontfamily": "monospace"},
+        ):
+            textanchor = ax.get_window_extent()
+            ax.annotate(
+                text,
+                pos,
+                xycoords=textanchor,
+                va="top",
+                bbox=dict(facecolor="lightgray", edgecolor="black", boxstyle="round"),
+                **text_options,
+            )
+
+        if archive:
+            archive_path = Path(self._project_dir) / "archive"
+
+            if not archive_path.is_dir():
+                archive_path.mkdir()
+
+            archive_path /= f"sim-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
+
+            if not archive_path.is_dir():
+                archive_path.mkdir()
+
+            shutil.copytree(
+                f"{self._project_dir}/configs", archive_path, dirs_exist_ok=True
+            )
+
+        for software in softwares:
+            labels = {
+                "SKY": "Skymodel",
+                "CFG": "Konfiguration",
+                "ABS": "Amplitude der Visibilities",
+                "DIRTY": "Dirty Image",
+                "WS": "WSCLEAN",
+                "TC": "tclean",
+                "MASK": "Gerasterte $(u,v)$-Abdeckung",
+            }
+
+            fig, ax = plt.subplot_mosaic(
+                [["SKY", "MASK"], ["ABS", "DIRTY"], ["WS", "TC"], ["CFG", "_"]],
+                layout="constrained",
+                figsize=(12, 20),
+            )
+
+            config = self.get_config(software)
+            skymodel_metadata = config["skymodel"]["metadata"]
+            obs_config = config["observation_params"]
+
+            if software == "pyvisgen":
+                fig.suptitle(
+                    f"Beobachtung von {self.skymodel.name}\n[ {software} ({self.config_pyvisgen['mode']})]"
+                )
+            else:
+                fig.suptitle(f"Beobachtung von {self.skymodel.name}\n[ {software} ]")
+
+            labels["WS"] += f" (niter={config[f'{software}_params']['wsclean_niter']})"
+            labels["TC"] += f" (niter={config[f'{software}_params']['tclean_niter']})"
+
+            for label, axis in ax.items():
+                if label != "CFG" and label != "_":
+                    axis.set_title(labels[label])
+
+                gridder = self.get_gridder(software=software)
+
+                match label:
+                    case "SKY":
+                        self.skymodel.plot_clean(fig=fig, ax=axis, colorbar_shrink=0.9)
+                    case "CFG":
+                        axis.axis("off")
+
+                        config_text = (
+                            f'img_size:\t{skymodel_metadata["img_size"]} px^2\n'
+                        )
+                        config_text += (
+                            f'cell_size:\t{skymodel_metadata["cell_size"]} asec/px\n'
+                        )
+                        config_text += f'fov:\t\t{skymodel_metadata["fov"]} * {obs_config["fov_multiplier"]} asec\n'
+                        config_text += (
+                            f'scan_duration:\t{obs_config["scan_duration"]} s\n'
+                        )
+                        config_text += f'int_time:\t{obs_config["integration_time"]} s'
+
+                        plot_text(config_text.expandtabs(), ax=axis)
+                    case "MASK":
+                        gridder.plot_mask(fig=fig, ax=axis, colorbar_shrink=1.0002)
+                    case "ABS":
+                        gridder.plot_mask_absolute(
+                            fig=fig, ax=axis, colorbar_shrink=0.92
+                        )
+                    case "DIRTY":
+                        gridder.plot_dirty_image(fig=fig, ax=axis, colorbar_shrink=0.9)
+                    case "WS":
+                        self.plot_wsclean_result(
+                            software, fig=fig, ax=axis, colorbar_shrink=0.9
+                        )
+                    case "TC":
+                        self.plot_tclean_result(
+                            software, fig=fig, ax=axis, colorbar_shrink=0.9
+                        )
+                    case "_":
+                        axis.axis("off")
+
+            if archive:
+                fig.savefig(f"{str(archive_path)}/{software}.pdf", **save_args)
+
+        if archive and compress:
+            shutil.rmtree(archive_path / ".ipynb_checkpoints")
+            zip_path = shutil.make_archive(
+                f"{str(archive_path).split('/')[-1]}", "zip", root_dir=archive_path
+            )
+            shutil.move(zip_path, archive_path.parents[0])
+
+            if not keep_directory:
+                shutil.rmtree(archive_path)
 
     @classmethod
     def load_from_cfg(cls, project_path):
