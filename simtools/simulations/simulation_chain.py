@@ -121,7 +121,7 @@ class Simulation:
     def _ch_projectdir(self):
         os.chdir(self._project_dir)
 
-    def get_config(self, software):
+    def get_config(self):
         config = {
             "project_name": self.project_name,
             "skymodel": {
@@ -138,19 +138,14 @@ class Simulation:
             },
         }
 
-        match software:
-            case "pyvisgen":
-                pyvisgen_conf = self.config_pyvisgen
-                return config | {
-                    "pyvisgen_params": pyvisgen_conf
-                    if pyvisgen_conf is not None
-                    else {}
-                }
-            case "casa":
-                casa_conf = self.config_casa
-                return config | {
-                    "casa_params": casa_conf if casa_conf is not None else {}
-                }
+        pyvisgen_conf = self.config_pyvisgen
+        casa_conf = self.config_casa
+
+        return (
+            config
+            | {"pyvisgen_params": pyvisgen_conf if pyvisgen_conf is not None else {}}
+            | {"casa_params": casa_conf if casa_conf is not None else {}}
+        )
 
     def save_configs(self):
         config_dir = Path(f"{self._project_dir}/configs")
@@ -158,19 +153,9 @@ class Simulation:
         if not config_dir.is_dir():
             config_dir.mkdir()
 
-        with open(
-            f"{config_dir}/{self.project_name}_pyvisgen_conf.yml", "w"
-        ) as outfile:
+        with open(f"{config_dir}/{self.project_name}_conf.yml", "w") as outfile:
             yaml.dump(
-                self.get_config("pyvisgen"),
-                outfile,
-                default_flow_style=False,
-                sort_keys=False,
-            )
-
-        with open(f"{config_dir}/{self.project_name}_casa_conf.yml", "w") as outfile:
-            yaml.dump(
-                self.get_config("casa"),
+                self.get_config(),
                 outfile,
                 default_flow_style=False,
                 sort_keys=False,
@@ -578,6 +563,12 @@ class Simulation:
         keep_directory=False,
         save_args={},
         softwares=["pyvisgen", "casa"],
+        skymodel_plot_args={},
+        mask_plot_args={},
+        mask_abs_args={},
+        dirty_img_args={},
+        wsclean_img_args={},
+        tclean_img_args={},
     ):
         def plot_text(
             text,
@@ -649,7 +640,9 @@ class Simulation:
 
                 match label:
                     case "SKY":
-                        self.skymodel.plot_clean(fig=fig, ax=axis, colorbar_shrink=0.9)
+                        self.skymodel.plot_clean(
+                            fig=fig, ax=axis, colorbar_shrink=0.9, **skymodel_plot_args
+                        )
                     case "CFG":
                         axis.axis("off")
 
@@ -667,20 +660,32 @@ class Simulation:
 
                         plot_text(config_text.expandtabs(), ax=axis)
                     case "MASK":
-                        gridder.plot_mask(fig=fig, ax=axis, colorbar_shrink=1.0002)
+                        gridder.plot_mask(
+                            fig=fig, ax=axis, colorbar_shrink=1.0002, **mask_plot_args
+                        )
                     case "ABS":
                         gridder.plot_mask_absolute(
-                            fig=fig, ax=axis, colorbar_shrink=0.92
+                            fig=fig, ax=axis, colorbar_shrink=0.92, **mask_abs_args
                         )
                     case "DIRTY":
-                        gridder.plot_dirty_image(fig=fig, ax=axis, colorbar_shrink=0.9)
+                        gridder.plot_dirty_image(
+                            fig=fig, ax=axis, colorbar_shrink=0.9, **dirty_img_args
+                        )
                     case "WS":
                         self.plot_wsclean_result(
-                            software, fig=fig, ax=axis, colorbar_shrink=0.9
+                            software,
+                            fig=fig,
+                            ax=axis,
+                            colorbar_shrink=0.9,
+                            **wsclean_img_args,
                         )
                     case "TC":
                         self.plot_tclean_result(
-                            software, fig=fig, ax=axis, colorbar_shrink=0.9
+                            software,
+                            fig=fig,
+                            ax=axis,
+                            colorbar_shrink=0.9,
+                            **tclean_img_args,
                         )
                     case "_":
                         axis.axis("off")
@@ -690,6 +695,7 @@ class Simulation:
                     f"{str(archive_path)}/{self.skymodel.name}_{software}_results.pdf",
                     **save_args,
                 )
+                print(f"Created archive directory {str(archive_path)}")
 
         if archive and compress:
             shutil.rmtree(archive_path / ".ipynb_checkpoints")
@@ -697,6 +703,7 @@ class Simulation:
                 f"{str(archive_path).split('/')[-1]}", "zip", root_dir=archive_path
             )
             shutil.move(zip_path, archive_path.parents[0])
+            print(f"Created zip-archive {str(archive_path).split('/')[-1]}")
 
             if not keep_directory:
                 shutil.rmtree(archive_path)
@@ -710,28 +717,25 @@ class Simulation:
 
         project_name = project_path.split("/")[-1]
 
-        with open(f"{config_dir}/{project_name}_casa_conf.yml", "r") as file:
-            casa_config = yaml.safe_load(file)
-
-        with open(f"{config_dir}/{project_name}_pyvisgen_conf.yml", "r") as file:
-            pyvisgen_config = yaml.safe_load(file)
+        with open(f"{config_dir}/{project_name}_conf.yml", "r") as file:
+            config = yaml.safe_load(file)
 
         skymodel = Skymodel(
-            casa_config["skymodel"]["path"].replace("_cleaned", ""),
-            casa_config["skymodel"]["source"],
-            casa_config["skymodel"]["path"],
+            config["skymodel"]["path"].replace("_cleaned", ""),
+            config["skymodel"]["source"],
+            config["skymodel"]["path"],
         )
 
         cls = cls(
             project_name,
             skymodel,
-            casa_config["observation_params"]["scan_duration"],
-            casa_config["observation_params"]["integration_time"],
-            casa_config["observation_params"]["observatory"],
+            config["observation_params"]["scan_duration"],
+            config["observation_params"]["integration_time"],
+            config["observation_params"]["observatory"],
         )
 
-        cls.config_casa = casa_config["casa_params"]
-        cls.config_pyvisgen = pyvisgen_config["pyvisgen_params"]
+        cls.config_casa = config["casa_params"]
+        cls.config_pyvisgen = config["pyvisgen_params"]
 
         return cls
 
