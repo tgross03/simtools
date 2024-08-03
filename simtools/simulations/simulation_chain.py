@@ -72,6 +72,10 @@ from casatasks import simobserve, simanalyze
 from casatools.table import table
 
 
+def calculate_beam_area(bmin, bmaj, model_incell):
+    return 2 * np.pi * bmaj * bmin / ((model_incell) ** 2 * 8 * np.log(2))
+
+
 class Simulation:
     def __init__(
         self,
@@ -786,6 +790,7 @@ class Skymodel:
         rms_cut_args={"sigma": 2.9},
         dbscan_args={"min_brightness": 1e-4},
         output_path=None,
+        flux_per_beam=False,
         overwrite=False,
     ):
         if output_path is None:
@@ -797,6 +802,7 @@ class Skymodel:
         cleaned_file = Path(cleaned_path)
 
         if cleaned_file.is_file() and not overwrite:
+            self.flux_per_beam = fits.open(cleaned_path)[0].header["BUNIT"] == "Jy/beam"
             warnings.warn(
                 "The file already exists and is not supposed to be overwritten. Skipping cleaning."
             )
@@ -813,7 +819,22 @@ class Skymodel:
             crop[0][0] : crop[0][1], crop[1][0] : crop[1][1]
         ]
 
-        f[0].data = skymodel_cleaned[None, None]
+        self.flux_per_beam = flux_per_beam
+
+        beam_info = self.get_metadata()["beam"]
+        beam_area = calculate_beam_area(
+            beam_info["bmin"], beam_info["bmaj"], self.get_metadata()["cell_size"]
+        )
+
+        f[0].data = (
+            skymodel_cleaned[None, None]
+            if flux_per_beam
+            else skymodel_cleaned[None, None] / beam_area
+        )
+
+        if not flux_per_beam:
+            f[0].header["BUNIT"] = "Jy/px "
+
         f[0].writeto(cleaned_path, overwrite=overwrite)
 
         return self
@@ -863,7 +884,12 @@ class Skymodel:
         ax.set_xlim(crop[0][0], crop[0][1])
         ax.set_ylim(crop[1][0], crop[1][1])
 
-        fig.colorbar(im, ax=ax, shrink=colorbar_shrink, label="Flussdichte in Jy/beam")
+        fig.colorbar(
+            im,
+            ax=ax,
+            shrink=colorbar_shrink,
+            label=f"Flussdichte in Jy/{'beam' if self.flux_per_beam else 'px'}",
+        )
 
         if save_to is not None:
             fig.savefig(save_to, **save_args)
