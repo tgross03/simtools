@@ -485,7 +485,7 @@ class Simulation:
 
         simobserve(
             project="casa",
-            skymodel=f"../{self.skymodel.cleaned_path}",
+            skymodel=self.skymodel.cleaned_path,
             incell=f'{self.metadata["cell_size"] * self.fov_multiplier}arcsec',
             incenter=f'{self.metadata["frequency"]}Hz',
             inwidth=f'{self.metadata["bandwidth"]}Hz',
@@ -605,6 +605,8 @@ class Simulation:
                 f"{self._project_dir}/configs", archive_path, dirs_exist_ok=True
             )
 
+        config = self.get_config()
+
         for software in softwares:
             labels = {
                 "SKY": "Skymodel",
@@ -622,7 +624,6 @@ class Simulation:
                 figsize=(12, 20),
             )
 
-            config = self.get_config(software)
             skymodel_metadata = config["skymodel"]["metadata"]
             obs_config = config["observation_params"]
 
@@ -747,8 +748,13 @@ class Simulation:
 class Skymodel:
     def __init__(self, path, source_name, cleaned_path=None):
         self.name = source_name
-        self.original_path = path
-        self.cleaned_path = cleaned_path
+        self.original_path = str(Path(path).resolve())
+        self.cleaned_path = (
+            str(Path(cleaned_path).resolve()) if cleaned_path is not None else None
+        )
+
+        if cleaned_path is not None:
+            self.flux_per_beam = fits.open(cleaned_path)[0].header["BUNIT"] == "Jy/beam"
 
     def get_metadata(self):
         f = fits.open(self.cleaned_path)[0]
@@ -794,9 +800,9 @@ class Skymodel:
         overwrite=False,
     ):
         if output_path is None:
-            cleaned_path = f"{self._get_filename()}_cleaned.fits"
+            cleaned_path = str(Path(f"{self._get_filename()}_cleaned.fits").resolve())
         else:
-            cleaned_path = output_path
+            cleaned_path = str(Path(output_path).resolve())
 
         self.cleaned_path = cleaned_path
         cleaned_file = Path(cleaned_path)
@@ -833,7 +839,7 @@ class Skymodel:
         )
 
         if not flux_per_beam:
-            f[0].header["BUNIT"] = "Jy/px "
+            f[0].header["BUNIT"] = "Jy/pix "
 
         f[0].writeto(cleaned_path, overwrite=overwrite)
 
