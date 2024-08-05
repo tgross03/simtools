@@ -827,9 +827,16 @@ class Skymodel:
 
         self.flux_per_beam = flux_per_beam
 
-        beam_info = self.get_metadata()["beam"]
+        header = f[0].header
+        beam_info = {
+            "bmin": header["BMIN"] * 3600,
+            "bmaj": header["BMAJ"] * 3600,
+            "bpa": header["BPA"],
+        }
+
+        print(skymodel_cleaned.shape[0])
         beam_area = calculate_beam_area(
-            beam_info["bmin"], beam_info["bmaj"], self.get_metadata()["cell_size"]
+            beam_info["bmin"], beam_info["bmaj"], skymodel_cleaned.shape[0]
         )
 
         f[0].data = (
@@ -839,7 +846,7 @@ class Skymodel:
         )
 
         if not flux_per_beam:
-            f[0].header["BUNIT"] = "Jy/pix "
+            header["BUNIT"] = "Jy/pix "
 
         f[0].writeto(cleaned_path, overwrite=overwrite)
 
