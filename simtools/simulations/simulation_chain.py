@@ -223,7 +223,14 @@ class Simulation:
             case "casa":
                 self._simulate_casa()
 
-    def wsclean(self, software, niter=[50000, 50000], verbose=False):
+    def wsclean(
+        self,
+        software,
+        niter=[50000, 50000],
+        data_column="MODEL_DATA",
+        save_config=False,
+        verbose=False,
+    ):
         if software not in ("casa", "pyvisgen"):
             raise KeyError(
                 f"The software {software} does not exist! Use (casa or pyvisgen)!"
@@ -281,7 +288,7 @@ class Simulation:
         -size {self.metadata["img_size"]} {self.metadata["img_size"]} \
         -scale {self.metadata["cell_size"] * self.fov_multiplier}asec \
         -pol I \
-        -data-column MODEL_DATA \
+        -data-column {data_column} \
         -niter {niter[1]} \
         -auto-threshold 1 \
         -auto-mask 3 \
@@ -293,7 +300,10 @@ class Simulation:
 
         subprocess.run(cmd, shell=True)
 
-    def tclean(self, software, niter=10000, overwrite=False):
+        if save_config:
+            self.save_configs()
+
+    def tclean(self, software, niter=10000, save_config=False, overwrite=False):
         if software not in ("casa", "pyvisgen"):
             raise KeyError(
                 f"The software {software} does not exist! Use (casa or pyvisgen)!"
@@ -344,6 +354,9 @@ class Simulation:
         )
 
         self._ch_parentdir()
+
+        if save_config:
+            self.save_configs()
 
     def plot_tclean_result(
         self,
