@@ -131,7 +131,7 @@ class Simulation:
             "skymodel": {
                 "source": self.skymodel.name,
                 "path": self.skymodel.cleaned_path,
-                "metadata": self.skymodel.get_metadata(),
+                "metadata": self.metadata,
             },
             "observation_params": {
                 "observatory": self.observatory,
@@ -401,7 +401,7 @@ class Simulation:
             }
 
             img_size = self.skymodel.get_metadata()["img_size"]
-            cell_size = self.skymodel.get_metadata()["cell_size"]
+            cell_size = self.skymodel.get_metadata()["cell_size"] * self.fov_multiplier
 
             ax.add_patch(
                 Ellipse(
@@ -446,7 +446,7 @@ class Simulation:
         if ax is None:
             fig, ax = plt.subplots(layout="constrained")
 
-        img_path = f"{self._project_dir}/{software}/{software}.fits-image.fits"
+        img_path = f"{self._project_dir}/{software}/{software}.fits-dirty.fits"
         beam_path = f"{self._project_dir}/{software}/{software}.fits-psf.fits"
 
         img = fits.open(img_path)[0].data[0, 0]
@@ -461,7 +461,7 @@ class Simulation:
             }
 
             img_size = self.skymodel.get_metadata()["img_size"]
-            cell_size = self.skymodel.get_metadata()["cell_size"]
+            cell_size = self.skymodel.get_metadata()["cell_size"] * self.fov_multiplier
 
             ax.add_patch(
                 Ellipse(
@@ -716,7 +716,8 @@ class Simulation:
                 print(f"Created archive directory {str(archive_path)}")
 
         if archive and compress:
-            shutil.rmtree(archive_path / ".ipynb_checkpoints")
+            if (archive_path / ".ipynb_checkpoints").is_dir():
+                shutil.rmtree(archive_path / ".ipynb_checkpoints")
             zip_path = shutil.make_archive(
                 f"{str(archive_path).split('/')[-1]}", "zip", root_dir=archive_path
             )
@@ -774,7 +775,7 @@ class Skymodel:
         header = f.header
 
         img_size = f.data[0, 0].shape[0]
-        cell_size = np.abs(header["cdelt1"] * 3600)
+        cell_size = np.abs(header["CDELT1"] * 3600)
 
         return {
             "img_size": img_size,
@@ -847,9 +848,8 @@ class Skymodel:
             "bpa": header["BPA"],
         }
 
-        print(skymodel_cleaned.shape[0])
         beam_area = calculate_beam_area(
-            beam_info["bmin"], beam_info["bmaj"], skymodel_cleaned.shape[0]
+            bmin=beam_info["bmin"], bmaj=beam_info["bmaj"], model_incell=np.abs(header["CDELT1"] * 3600)
         )
 
         f[0].data = (
