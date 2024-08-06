@@ -5,7 +5,6 @@ import subprocess
 
 import os
 
-import re
 import shutil
 import warnings
 import numpy as np
@@ -84,6 +83,7 @@ class Simulation:
         scan_duration,
         int_time,
         observatory,
+        fov_multiplier=1,
         obs_date=None,
     ):
         self.project_name = project_name
@@ -117,7 +117,7 @@ class Simulation:
         self.obs_time = self._src_vis.get_optimal_date()[0]
         self.scan_duration = scan_duration
         self.int_time = int_time
-        self.fov_multiplier = 1
+        self.fov_multiplier = fov_multiplier
 
     def _ch_parentdir(self):
         os.chdir(self._parent_dir)
@@ -201,15 +201,13 @@ class Simulation:
 
         return self
 
-    def simulate(self, software, fov_multiplier=1):
+    def simulate(self, software):
         if software not in ("casa", "pyvisgen"):
             raise KeyError(
                 f"The software {software} does not exist! Use (casa or pyvisgen)!"
             )
 
         print(f" |--- Simulation of {self.skymodel.name} with {software} ---|")
-
-        self.fov_multiplier = fov_multiplier
 
         path = Path(f"{self._project_dir}/{software}")
 
@@ -746,11 +744,12 @@ class Simulation:
         )
 
         cls = cls(
-            project_name,
-            skymodel,
-            config["observation_params"]["scan_duration"],
-            config["observation_params"]["integration_time"],
-            config["observation_params"]["observatory"],
+            project_name=project_name,
+            skymodel=skymodel,
+            scan_duration=config["observation_params"]["scan_duration"],
+            int_time=config["observation_params"]["integration_time"],
+            observatory=config["observation_params"]["observatory"],
+            fov_multiplier=config["observation_params"]["fov_multiplier"],
         )
 
         cls.config_casa = config["casa_params"]
@@ -799,6 +798,9 @@ class Skymodel:
 
     def get_cleaned_model(self):
         return fits.open(self.cleaned_path)[0].data[0]
+
+    def get_original_model(self):
+        return fits.open(self.original_path)[0].data[0]
 
     def _get_filename(self):
         return self.original_path.split(".fits")[0]
@@ -849,7 +851,9 @@ class Skymodel:
         }
 
         beam_area = calculate_beam_area(
-            bmin=beam_info["bmin"], bmaj=beam_info["bmaj"], model_incell=np.abs(header["CDELT1"] * 3600)
+            bmin=beam_info["bmin"],
+            bmaj=beam_info["bmaj"],
+            model_incell=np.abs(header["CDELT1"] * 3600),
         )
 
         f[0].data = (
@@ -931,10 +935,12 @@ class Skymodel:
         save_to=None,
         save_args={},
         show_beam=True,
+        flux_per_beam=False,
         fig=None,
         ax=None,
     ):
-        skymodel = fits.open(self.original_path)[0].data[0, 0]
+        f = fits.open(self.original_path)[0]
+        skymodel = f.data[0, 0]
 
         if None in (fig, ax) and not all(x is None for x in (fig, ax)):
             raise KeyError(
@@ -944,16 +950,25 @@ class Skymodel:
         if ax is None:
             fig, ax = plt.subplots()
 
+        beam_info = self.get_metadata()["beam"]
+        cell_size = np.abs(f.header["CDELT1"] * 3600)
+
+        if not flux_per_beam:
+            skymodel /= calculate_beam_area(
+                bmaj=beam_info["bmaj"],
+                bmin=beam_info["bmin"],
+                model_incell=cell_size,
+            )
+
         im = ax.imshow(skymodel, norm=PowerNorm(gamma=exp), **plot_args, origin="lower")
 
         if show_beam:
-            beam_info = self.get_metadata()["beam"]
-            img_size = skymodel.shape[0]
-            cell_size = self.get_metadata()["cell_size"]
-
             ax.add_patch(
                 Ellipse(
-                    (int(img_size / 10), int(img_size / 10)),
+                    (
+                        crop[0][0] + int((crop[0][1] - crop[0][0]) / 10),
+                        crop[1][0] + int((crop[1][1] - crop[1][0]) / 10),
+                    ),
                     width=beam_info["bmin"] / cell_size,
                     height=beam_info["bmaj"] / cell_size,
                     angle=beam_info["bpa"],
@@ -967,7 +982,12 @@ class Skymodel:
         ax.set_xlim(crop[0][0], crop[0][1])
         ax.set_ylim(crop[1][0], crop[1][1])
 
-        fig.colorbar(im, ax=ax, shrink=colorbar_shrink, label="Flussdichte in Jy/beam")
+        fig.colorbar(
+            im,
+            ax=ax,
+            shrink=colorbar_shrink,
+            label=f"Flussdichte in Jy/{'beam' if flux_per_beam else 'px'}",
+        )
 
         if save_to is not None:
             fig.savefig(save_to, **save_args)
