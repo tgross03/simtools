@@ -301,7 +301,9 @@ class Simulation:
         if save_config:
             self.save_configs()
 
-    def tclean(self, software, niter=10000, save_config=False, overwrite=False):
+    def tclean(
+        self, software, niter=10000, save_config=False, overwrite=False, verbose=False
+    ):
         if software not in ("casa", "pyvisgen"):
             raise KeyError(
                 f"The software {software} does not exist! Use (casa or pyvisgen)!"
@@ -348,7 +350,9 @@ class Simulation:
             imsize=[int(self.metadata["img_size"]), int(self.metadata["img_size"])],
             cell=f"{self.metadata['cell_size'] * self.fov_multiplier}arcsec",
             graphics="none",
+            threshold="1e-8Jy",
             overwrite=overwrite,
+            verbose=verbose,
         )
 
         self._ch_parentdir()
@@ -359,8 +363,12 @@ class Simulation:
     def plot_tclean_result(
         self,
         software,
+        rot90=0,
+        invert_x=False,
+        invert_y=False,
         cut_negative_flux=False,
         show_beam=True,
+        flux_per_beam=True,
         save_to=None,
         save_args={},
         plot_args={"cmap": "inferno", "norm": PowerNorm(gamma=0.5)},
@@ -389,17 +397,18 @@ class Simulation:
 
         img = table(img_path).getcol("map")[:, :, 0, 0, 0]
 
-        if show_beam:
-            beam = table(beam_path)
-            beam_desc = beam.getdesc()["_keywords_"]["imageinfo"]["restoringbeam"]
-            beam_info = {
-                "bmin": beam_desc["minor"]["value"],
-                "bmaj": beam_desc["major"]["value"],
-                "bpa": beam_desc["positionangle"]["value"],
-            }
+        beam = table(beam_path)
+        beam_desc = beam.getdesc()["_keywords_"]["imageinfo"]["restoringbeam"]
+        beam_info = {
+            "bmin": beam_desc["minor"]["value"],
+            "bmaj": beam_desc["major"]["value"],
+            "bpa": beam_desc["positionangle"]["value"],
+        }
 
+        cell_size = self.skymodel.get_metadata()["cell_size"] * self.fov_multiplier
+
+        if show_beam:
             img_size = self.skymodel.get_metadata()["img_size"]
-            cell_size = self.skymodel.get_metadata()["cell_size"] * self.fov_multiplier
 
             ax.add_patch(
                 Ellipse(
@@ -414,10 +423,28 @@ class Simulation:
         if cut_negative_flux:
             img[img < 0] = 0
 
-        im = ax.imshow(img, origin="lower", **plot_args)
+        if invert_x:
+            img = np.fliplr(img)
+
+        if invert_y:
+            img = np.flipud(img)
+
+        if not flux_per_beam:
+            img /= calculate_beam_area(
+                bmin=beam_info["bmin"], bmaj=["bmaj"], model_incell=cell_size
+            )
+
+        multiplier = 1 if software != "pyvisgen" else 2
+
+        im = ax.imshow(np.rot90(img, rot90) * multiplier, origin="lower", **plot_args)
         ax.set_ylabel("Pixel")
         ax.set_xlabel("Pixel")
-        fig.colorbar(im, ax=ax, label="Flussdichte in Jy/beam", shrink=colorbar_shrink)
+        fig.colorbar(
+            im,
+            ax=ax,
+            label=f"Flussdichte in Jy/{'beam' if flux_per_beam else 'px'}",
+            shrink=colorbar_shrink,
+        )
 
         if save_to is not None:
             fig.savefig(save_to, **save_args)
@@ -427,8 +454,12 @@ class Simulation:
     def plot_wsclean_result(
         self,
         software,
+        rot90=0,
+        invert_x=False,
+        invert_y=False,
         cut_negative_flux=False,
         show_beam=True,
+        flux_per_beam=True,
         save_to=None,
         save_args={},
         plot_args={"cmap": "inferno", "norm": PowerNorm(gamma=0.5)},
@@ -449,17 +480,18 @@ class Simulation:
 
         img = fits.open(img_path)[0].data[0, 0]
 
-        if show_beam:
-            beam = fits.open(beam_path)[0]
-            header = beam.header
-            beam_info = {
-                "bmin": header["BMIN"] * 3600,
-                "bmaj": header["BMAJ"] * 3600,
-                "bpa": header["BPA"],
-            }
+        cell_size = self.skymodel.get_metadata()["cell_size"] * self.fov_multiplier
 
+        beam = fits.open(beam_path)[0]
+        header = beam.header
+        beam_info = {
+            "bmin": header["BMIN"] * 3600,
+            "bmaj": header["BMAJ"] * 3600,
+            "bpa": header["BPA"],
+        }
+
+        if show_beam:
             img_size = self.skymodel.get_metadata()["img_size"]
-            cell_size = self.skymodel.get_metadata()["cell_size"] * self.fov_multiplier
 
             ax.add_patch(
                 Ellipse(
@@ -474,10 +506,30 @@ class Simulation:
         if cut_negative_flux:
             img[img < 0] = 0
 
-        im = ax.imshow(np.fliplr(np.rot90(img, 1)), origin="lower", **plot_args)
+        if invert_x:
+            img = np.fliplr(img)
+
+        if invert_y:
+            img = np.flipud(img)
+
+        if not flux_per_beam:
+            img /= calculate_beam_area(
+                bmin=beam_info["bmin"], bmaj=["bmaj"], model_incell=cell_size
+            )
+
+        multiplier = 1 if software != "pyvisgen" else 2
+
+        im = ax.imshow(
+            np.fliplr(np.rot90(img, rot90)) * multiplier, origin="lower", **plot_args
+        )
         ax.set_ylabel("Pixel")
         ax.set_xlabel("Pixel")
-        fig.colorbar(im, ax=ax, label="Flussdichte in Jy/beam", shrink=colorbar_shrink)
+        fig.colorbar(
+            im,
+            ax=ax,
+            label=f"Flussdichte in Jy/{'beam' if flux_per_beam else 'px'}",
+            shrink=colorbar_shrink,
+        )
 
         if save_to is not None:
             fig.savefig(save_to, **save_args)
@@ -751,6 +803,9 @@ class Simulation:
             observatory=config["observation_params"]["observatory"],
             fov_multiplier=config["observation_params"]["fov_multiplier"],
         )
+
+        cls._parent_dir = str(Path(project_path).resolve().parents[0])
+        cls._project_dir = f"{cls._parent_dir}/{project_name}"
 
         cls.config_casa = config["casa_params"]
         cls.config_pyvisgen = config["pyvisgen_params"]
