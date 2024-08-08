@@ -463,7 +463,7 @@ class Simulation:
 
         if not flux_per_beam:
             img /= calculate_beam_correction(
-                bmin=beam_info["bmin"], bmaj=["bmaj"], model_incell=cell_size
+                bmin=beam_info["bmin"], bmaj=beam_info["bmaj"], model_incell=cell_size
             )
 
         multiplier = 1 if software != "pyvisgen" else 2
