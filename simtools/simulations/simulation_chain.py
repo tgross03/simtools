@@ -71,8 +71,38 @@ from casatasks import simobserve, simanalyze
 from casatools.table import table
 
 
-def calculate_beam_area(bmin, bmaj, model_incell):
+def calculate_beam_correction(bmin, bmaj, model_incell):
     return 2 * np.pi * bmaj * bmin / ((model_incell) ** 2 * 8 * np.log(2))
+
+
+def plot_text(
+    text,
+    ax,
+    pos=(0, 1),
+    text_options=dict(fontsize=12, fontfamily="monospace"),
+    bbox=dict(facecolor="lightgray", edgecolor="black", boxstyle="round"),
+):
+    textanchor = ax.get_window_extent()
+    ax.annotate(
+        text,
+        pos,
+        xycoords=textanchor,
+        va="top",
+        bbox=bbox,
+        **text_options,
+    )
+
+
+def _plot_label(text, ax):
+    plot_text(
+        text,
+        ax,
+        pos=(0.05, 0.95),
+        text_options=dict(fontsize=15),
+        bbox=dict(
+            facecolor="lightgray", alpha=0.8, edgecolor="black", boxstyle="round"
+        ),
+    )
 
 
 class Simulation:
@@ -363,6 +393,7 @@ class Simulation:
     def plot_tclean_result(
         self,
         software,
+        exp=1,
         rot90=0,
         invert_x=False,
         invert_y=False,
@@ -371,8 +402,9 @@ class Simulation:
         flux_per_beam=True,
         save_to=None,
         save_args={},
-        plot_args={"cmap": "inferno", "norm": PowerNorm(gamma=0.5)},
+        plot_args={"cmap": "inferno"},
         colorbar_shrink=1,
+        annotation=None,
         fig=None,
         ax=None,
     ):
@@ -430,13 +462,25 @@ class Simulation:
             img = np.flipud(img)
 
         if not flux_per_beam:
-            img /= calculate_beam_area(
+            img /= calculate_beam_correction(
                 bmin=beam_info["bmin"], bmaj=["bmaj"], model_incell=cell_size
             )
 
         multiplier = 1 if software != "pyvisgen" else 2
 
-        im = ax.imshow(np.rot90(img, rot90) * multiplier, origin="lower", **plot_args)
+        norm = None if exp == 1 else PowerNorm(gamma=exp)
+
+        im = ax.imshow(
+            np.rot90(img, rot90) * multiplier,
+            interpolation="none",
+            origin="lower",
+            norm=norm,
+            **plot_args,
+        )
+
+        if annotation is not None:
+            _plot_label(annotation, ax)
+
         ax.set_ylabel("Pixel")
         ax.set_xlabel("Pixel")
         fig.colorbar(
@@ -454,6 +498,7 @@ class Simulation:
     def plot_wsclean_result(
         self,
         software,
+        exp=1,
         rot90=0,
         invert_x=False,
         invert_y=False,
@@ -462,8 +507,9 @@ class Simulation:
         flux_per_beam=True,
         save_to=None,
         save_args={},
-        plot_args={"cmap": "inferno", "norm": PowerNorm(gamma=0.5)},
+        plot_args={"cmap": "inferno"},
         colorbar_shrink=1,
+        annotation=None,
         fig=None,
         ax=None,
     ):
@@ -513,21 +559,31 @@ class Simulation:
             img = np.flipud(img)
 
         if not flux_per_beam:
-            img /= calculate_beam_area(
+            img /= calculate_beam_correction(
                 bmin=beam_info["bmin"], bmaj=["bmaj"], model_incell=cell_size
             )
 
         multiplier = 1 if software != "pyvisgen" else 2
 
+        norm = None if exp == 1 else PowerNorm(gamma=exp)
+
         im = ax.imshow(
-            np.fliplr(np.rot90(img, rot90)) * multiplier, origin="lower", **plot_args
+            np.fliplr(np.rot90(img, rot90)) * multiplier,
+            origin="lower",
+            norm=norm,
+            **plot_args,
         )
+
+        if annotation is not None:
+            _plot_label(annotation, ax)
+
         ax.set_ylabel("Pixel")
         ax.set_xlabel("Pixel")
         fig.colorbar(
             im,
             ax=ax,
             label=f"Flussdichte in Jy/{'beam' if flux_per_beam else 'px'}",
+            interpolation="none",
             shrink=colorbar_shrink,
         )
 
@@ -637,22 +693,6 @@ class Simulation:
         wsclean_img_args={},
         tclean_img_args={},
     ):
-        def plot_text(
-            text,
-            ax,
-            pos=(0, 1),
-            text_options={"fontsize": 12, "fontfamily": "monospace"},
-        ):
-            textanchor = ax.get_window_extent()
-            ax.annotate(
-                text,
-                pos,
-                xycoords=textanchor,
-                va="top",
-                bbox=dict(facecolor="lightgray", edgecolor="black", boxstyle="round"),
-                **text_options,
-            )
-
         if archive:
             archive_path = Path(self._project_dir) / "archive"
 
@@ -697,8 +737,19 @@ class Simulation:
             else:
                 fig.suptitle(f"Beobachtung von {self.skymodel.name}\n[ {software} ]")
 
-            labels["WS"] += f" (niter={config[f'{software}_params']['wsclean_niter']})"
-            labels["TC"] += f" (niter={config[f'{software}_params']['tclean_niter']})"
+            tclean_exec = "tclean_niter" in config[f"{software}_params"]
+            wsclean_exec = "wsclean_niter" in config[f"{software}_params"]
+
+            labels["WS"] += (
+                f" (niter={config[f'{software}_params']['wsclean_niter']})"
+                if wsclean_exec
+                else ""
+            )
+            labels["TC"] += (
+                f" (niter={config[f'{software}_params']['tclean_niter']})"
+                if tclean_exec
+                else ""
+            )
 
             for label, axis in ax.items():
                 if label != "CFG" and label != "_":
@@ -717,9 +768,7 @@ class Simulation:
                         config_text = (
                             f'img_size:\t{skymodel_metadata["img_size"]} px^2\n'
                         )
-                        config_text += (
-                            f'cell_size:\t{skymodel_metadata["cell_size"]} asec/px\n'
-                        )
+                        config_text += f'cell_size:\t{skymodel_metadata["cell_size"]} * {obs_config["fov_multiplier"]} asec/px\n'
                         config_text += f'fov:\t\t{skymodel_metadata["fov"]} * {obs_config["fov_multiplier"]} asec\n'
                         config_text += (
                             f'scan_duration:\t{obs_config["scan_duration"]} s\n'
@@ -740,21 +789,27 @@ class Simulation:
                             fig=fig, ax=axis, colorbar_shrink=0.9, **dirty_img_args
                         )
                     case "WS":
-                        self.plot_wsclean_result(
-                            software,
-                            fig=fig,
-                            ax=axis,
-                            colorbar_shrink=0.9,
-                            **wsclean_img_args,
-                        )
+                        if wsclean_exec:
+                            self.plot_wsclean_result(
+                                software,
+                                fig=fig,
+                                ax=axis,
+                                colorbar_shrink=0.9,
+                                **wsclean_img_args,
+                            )
+                        else:
+                            axis.axis("off")
                     case "TC":
-                        self.plot_tclean_result(
-                            software,
-                            fig=fig,
-                            ax=axis,
-                            colorbar_shrink=0.9,
-                            **tclean_img_args,
-                        )
+                        if tclean_exec:
+                            self.plot_tclean_result(
+                                software,
+                                fig=fig,
+                                ax=axis,
+                                colorbar_shrink=0.9,
+                                **tclean_img_args,
+                            )
+                        else:
+                            axis.axis("off")
                     case "_":
                         axis.axis("off")
 
@@ -905,7 +960,7 @@ class Skymodel:
             "bpa": header["BPA"],
         }
 
-        beam_area = calculate_beam_area(
+        beam_correction = calculate_beam_correction(
             bmin=beam_info["bmin"],
             bmaj=beam_info["bmaj"],
             model_incell=np.abs(header["CDELT1"] * 3600),
@@ -914,7 +969,7 @@ class Skymodel:
         f[0].data = (
             skymodel_cleaned[None, None]
             if flux_per_beam
-            else skymodel_cleaned[None, None] / beam_area
+            else skymodel_cleaned[None, None] / beam_correction
         )
 
         if not flux_per_beam:
@@ -933,6 +988,7 @@ class Skymodel:
         save_to=None,
         save_args={},
         show_beam=True,
+        annotation=None,
         fig=None,
         ax=None,
     ):
@@ -946,7 +1002,12 @@ class Skymodel:
         if ax is None:
             fig, ax = plt.subplots()
 
+        crop = ([0, skymodel.shape[0]], [0, skymodel.shape[0]])
+
         im = ax.imshow(skymodel, norm=PowerNorm(gamma=exp), **plot_args, origin="lower")
+
+        if annotation is not None:
+            _plot_label(annotation, ax)
 
         if show_beam:
             beam_info = self.get_metadata()["beam"]
@@ -991,6 +1052,7 @@ class Skymodel:
         save_args={},
         show_beam=True,
         flux_per_beam=False,
+        annotation=None,
         fig=None,
         ax=None,
     ):
@@ -1009,13 +1071,18 @@ class Skymodel:
         cell_size = np.abs(f.header["CDELT1"] * 3600)
 
         if not flux_per_beam:
-            skymodel /= calculate_beam_area(
+            skymodel /= calculate_beam_correction(
                 bmaj=beam_info["bmaj"],
                 bmin=beam_info["bmin"],
                 model_incell=cell_size,
             )
 
+        crop = ([0, skymodel.shape[0]], [0, skymodel.shape[0]])
+
         im = ax.imshow(skymodel, norm=PowerNorm(gamma=exp), **plot_args, origin="lower")
+
+        if annotation is not None:
+            _plot_label(annotation, ax)
 
         if show_beam:
             ax.add_patch(
