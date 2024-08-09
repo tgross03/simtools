@@ -332,7 +332,13 @@ class Simulation:
             self.save_configs()
 
     def tclean(
-        self, software, niter=10000, save_config=False, overwrite=False, verbose=False
+        self,
+        software,
+        niter=10000,
+        threshold=1e-8,
+        save_config=False,
+        overwrite=False,
+        verbose=False,
     ):
         if software not in ("casa", "pyvisgen"):
             raise KeyError(
@@ -370,8 +376,10 @@ class Simulation:
                     f"{self._project_dir}/pyvisgen/pyvisgen.skymodel",
                 )
             self.config_pyvisgen["tclean_niter"] = niter
+            self.config_pyvisgen["tclean_threshold"] = threshold
         else:
             self.config_casa["tclean_niter"] = niter
+            self.config_casa["tclean_threshold"] = threshold
 
         print(f"|--- tclean of {self.skymodel.name} for {software} ---|")
         simanalyze(
@@ -380,7 +388,7 @@ class Simulation:
             imsize=[int(self.metadata["img_size"]), int(self.metadata["img_size"])],
             cell=f"{self.metadata['cell_size'] * self.fov_multiplier}arcsec",
             graphics="none",
-            threshold="1e-8Jy",
+            threshold=f"{threshold}Jy",
             overwrite=overwrite,
             verbose=verbose,
         )
@@ -405,6 +413,7 @@ class Simulation:
         plot_args={"cmap": "inferno"},
         colorbar_shrink=1,
         annotation=None,
+        return_image=False,
         fig=None,
         ax=None,
     ):
@@ -493,7 +502,10 @@ class Simulation:
         if save_to is not None:
             fig.savefig(save_to, **save_args)
 
-        return fig, ax
+        if return_image:
+            return fig, ax, np.rot90(img, rot90) * multiplier
+        else:
+            return fig, ax
 
     def plot_wsclean_result(
         self,
@@ -510,6 +522,7 @@ class Simulation:
         plot_args={"cmap": "inferno"},
         colorbar_shrink=1,
         annotation=None,
+        return_image=False,
         fig=None,
         ax=None,
     ):
@@ -568,7 +581,7 @@ class Simulation:
         norm = None if exp == 1 else PowerNorm(gamma=exp)
 
         im = ax.imshow(
-            np.fliplr(np.rot90(img, rot90)) * multiplier,
+            np.rot90(img, rot90) * multiplier,
             origin="lower",
             norm=norm,
             **plot_args,
@@ -590,7 +603,8 @@ class Simulation:
         if save_to is not None:
             fig.savefig(save_to, **save_args)
 
-        return fig, ax
+        if return_image:
+            return fig, ax, np.rot90(img, rot90)
 
     def _simulate_casa(self):
         self._ch_projectdir()
