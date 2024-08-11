@@ -14,25 +14,8 @@ import pandas as pd
 
 import logging
 
-torch._logging.set_logs(
-    dynamo=logging.CRITICAL, aot=logging.CRITICAL, inductor=logging.CRITICAL
-)
-
 # PyYAML
 import yaml
-
-try:
-    from yaml import CLoader as Loader, CDumper as Dumper
-except ImportError:
-    pass
-
-yaml.add_representer(
-    np.float64, lambda dumper, scalar: dumper.represent_float(float(scalar))
-)
-yaml.add_representer(
-    pd._libs.tslibs.timestamps.Timestamp,
-    lambda dumper, timestamp: dumper.represent_str(timestamp.isoformat()),
-)
 
 # matplotlib
 import matplotlib.pyplot as plt
@@ -68,6 +51,20 @@ from radio_stats.cuts.dbscan_clean import dbscan_clean
 # casa
 from casatasks import simobserve, simanalyze
 from casatools.table import table
+
+# torch dynamo logging
+torch._logging.set_logs(
+    dynamo=logging.CRITICAL, aot=logging.CRITICAL, inductor=logging.CRITICAL
+)
+
+# yaml representers for timestamps and numpy floats
+yaml.add_representer(
+    np.float64, lambda dumper, scalar: dumper.represent_float(float(scalar))
+)
+yaml.add_representer(
+    pd._libs.tslibs.timestamps.Timestamp,
+    lambda dumper, timestamp: dumper.represent_str(timestamp.isoformat()),
+)
 
 
 def calculate_beam_correction(bmin, bmaj, model_incell):
@@ -1392,7 +1389,7 @@ class Skymodel:
 
     def _get_filename(self):
         """
-        Intenal function to retrieve the filename of the original model
+        Internal function to retrieve the filename of the original model
         """
         return self.original_path.split(".fits")[0]
 
