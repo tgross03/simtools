@@ -24,7 +24,7 @@ import yaml
 try:
     from yaml import CLoader as Loader, CDumper as Dumper
 except ImportError:
-    from yaml import Loader, Dumper
+    pass
 
 yaml.add_representer(
     np.float64, lambda dumper, scalar: dumper.represent_float(float(scalar))
@@ -48,7 +48,6 @@ from pathlib import Path
 from astropy.io import fits
 from astropy.constants import c
 
-from astropy.io import fits
 
 # pyvisgen
 from pyvisgen.simulation.visibility import vis_loop
