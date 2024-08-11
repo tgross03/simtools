@@ -72,6 +72,23 @@ from casatools.table import table
 
 
 def calculate_beam_correction(bmin, bmaj, model_incell):
+    """
+
+    Calculates the correcting factor to convert from Jy/beam to Jy/px
+
+    Parameters
+    ----------
+    bmin : float
+        The minor axis of the beam FWHM in asec
+
+    bmaj : float
+        The major axis of the beam FWHM in asec
+
+    model_incell : float
+        The physical size of one pixel in asec
+
+    """
+
     return 2 * np.pi * bmaj * bmin / ((model_incell) ** 2 * 8 * np.log(2))
 
 
@@ -82,6 +99,29 @@ def plot_text(
     text_options=dict(fontsize=12, fontfamily="monospace"),
     bbox=dict(facecolor="lightgray", edgecolor="black", boxstyle="round"),
 ):
+    """
+
+    Plot a boxed text onto a matplotlib plot
+
+    Parameters
+    ----------
+    text : str
+        The text to write in the box
+
+    ax : matplotlib.axes._axes.Axes
+        A axis to put the text into
+
+    pos : tuple, optional
+        The relative position of the text box
+
+    text_options : dict, optional
+        The options for the annotation
+
+    bbox : dict, optional
+        The bbox argument of the annotation parameters
+
+    """
+
     textanchor = ax.get_window_extent()
     ax.annotate(
         text,
@@ -94,6 +134,20 @@ def plot_text(
 
 
 def _plot_label(text, ax):
+    """
+
+    Plot a boxed label in the upper left corner of the plot
+
+    Parameters
+    ----------
+    text : str
+        The text to write in the box
+
+    ax : matplotlib.axes._axes.Axes
+        A axis to put the text into
+
+    """
+
     plot_text(
         text,
         ax,
@@ -106,6 +160,10 @@ def _plot_label(text, ax):
 
 
 class Simulation:
+    """
+    The main class for simulating and cleaning radio interferometry observations
+    """
+
     def __init__(
         self,
         project_name,
@@ -116,6 +174,36 @@ class Simulation:
         fov_multiplier=1,
         obs_date=None,
     ):
+        """
+        Create a new simulation project
+
+        Parameters
+        ----------
+        project_name : str
+            Name of the project
+
+        skymodel : simulation_chain.Skymodel
+            The skymodel to use for the simulation
+
+        scan_duration : int
+            The duration of the observation in seconds
+
+        int_time : int
+            The integration time of the correlator
+
+        observatory : str
+            The observing observatory (e.g. ALMA)
+
+        fov_multiplier : float, optional
+            The factor to multiply the fov and cell_size by
+            for the simulations and cleaning
+
+        obs_date : str, optional
+            The date of the observation, set None for use of date saved
+            in Skymodel header
+
+        """
+
         self.project_name = project_name
         self._dirs = {}
 
@@ -150,12 +238,24 @@ class Simulation:
         self.fov_multiplier = fov_multiplier
 
     def _ch_parentdir(self):
+        """
+        Internal method to change the current working directory
+        to the parent directory of the project
+        """
         os.chdir(self._parent_dir)
 
     def _ch_projectdir(self):
+        """
+        Internal method to change the current working directory
+        to the project repository
+        """
         os.chdir(self._project_dir)
 
     def get_config(self):
+        """
+        Get the current state of the parameters
+        """
+
         config = {
             "project_name": self.project_name,
             "skymodel": {
@@ -182,6 +282,12 @@ class Simulation:
         )
 
     def save_configs(self):
+        """
+        Save the current state of the simulation parameters
+        in a yaml config file. Creates a new folder configs in the
+        project directory
+        """
+
         config_dir = Path(f"{self._project_dir}/configs")
 
         if not config_dir.is_dir():
@@ -207,6 +313,43 @@ class Simulation:
         corrupted=False,
         overwrite=False,
     ):
+        """
+        Initialize the simulation parameters for the simulation
+        with the pyvisgen package
+
+        Parameters
+        ----------
+        array_layout : str
+            Name of the pyvisgen array layout configuration file
+            without the file extension
+
+        device : str
+            The device to use for the calculations with torch
+            (e.g. cpu, cuda:0 or cuda:1)
+
+        sensitivity_cut : float
+            The intensity of the source distribution blow which
+            a pixel is not included in the calculation and assumed as zero
+
+        mode : str
+            The mode of the pyvisgen simulation_chain
+            (available: full, grid, dense (GPU only))
+
+        noisy : int, optional
+            The SEFD to use for the noise generation of pyvisgen
+
+        show_progress : bool , optional
+            Whether to show the progress of the visibility calculation
+            as a tqdm progress bar
+
+        corrupted : bool, optional
+            Whether to take DDEs (direction-dependent-effects) into
+            account for the simulations (RIME E-matrix)
+
+        overwrite : bool, optional
+            Whether to overwrite existing simulation results
+        """
+
         self.config_pyvisgen = {
             "array_layout": array_layout,
             "device": device,
@@ -223,6 +366,25 @@ class Simulation:
         return self
 
     def init_casa(self, array_layout, thermalnoise="", overwrite=False):
+        """
+        Initialize the simulation parameters for the simulation
+        with the simobserve command of NRAO CASA
+
+        Parameters
+        ----------
+
+        array_layout : str
+            Name of the pyvisgen array layout configuration file
+            without the file extension
+
+        thermalnoise : str, optional
+            The type of thermal noise to use for the simulation
+            (available: tsys-atm, tsys-manual or empty string)
+
+        overwrite : bool, optional
+            Whether to overwrite existing simulation results
+
+        """
         self.config_casa = {
             "array_layout": array_layout,
             "thermalnoise": thermalnoise,
@@ -232,6 +394,18 @@ class Simulation:
         return self
 
     def simulate(self, software):
+        """
+        Initialize the simulation parameters for the simulation
+        with the simobserve command of NRAO CASA
+
+        Parameters
+        ----------
+
+        software : str
+            The software to use for the simulation
+            (available: casa or pyvisgen)
+        """
+
         if software not in ("casa", "pyvisgen"):
             raise KeyError(
                 f"The software {software} does not exist! Use (casa or pyvisgen)!"
@@ -259,6 +433,34 @@ class Simulation:
         save_config=False,
         verbose=False,
     ):
+        """
+        Apply CLEAN algorithm using WSCLEAN to the image
+        of a simulation
+
+        Parameters
+        ----------
+
+        software : str
+            The software whose results are supposed to be
+            cleaned (available: casa or pyvisgen)
+
+        niter : tuple or array_like, optional
+            The amount of maximal iterations to perform on the
+            two runs of WSCLEAN
+
+        data_column : str, optional
+            The column to save the results of the first run of
+            WSCLEAN in the measurement set
+
+        save_config : bool, optional
+            Whether to save to configuration of the simulations
+            and cleanings after the execution
+
+        verbose : bool, optional
+            Whether to perform the WSCLEAN with the verbose flag
+
+        """
+
         if software not in ("casa", "pyvisgen"):
             raise KeyError(
                 f"The software {software} does not exist! Use (casa or pyvisgen)!"
@@ -340,6 +542,37 @@ class Simulation:
         overwrite=False,
         verbose=False,
     ):
+        """
+        Apply CLEAN algorithm using CASA simanalyze to the image
+        of a simulation
+
+        Parameters
+        ----------
+
+        software : str
+            The software whose results are supposed to be
+            cleaned (available: casa or pyvisgen)
+
+        niter : int, optional
+            The amount of maximal iterations to perform on the
+            execution of simanalyze
+
+        threshold : float, optional
+            The fluxdensity threshold at which the cleaning is ended
+
+        save_config : bool, optional
+            Whether to save to configuration of the simulations
+            and cleanings after the execution
+
+        overwrite : bool, optional
+            Whether to overwrite existing cleaning results (deletes
+            results before (!) execution of simanalyze
+
+        verbose : bool, optional
+            Whether to perform the simanalyze execution with verbose output
+
+        """
+
         if software not in ("casa", "pyvisgen"):
             raise KeyError(
                 f"The software {software} does not exist! Use (casa or pyvisgen)!"
@@ -417,6 +650,68 @@ class Simulation:
         fig=None,
         ax=None,
     ):
+        """
+        Plots the result of the simanalyze cleaning of a simulation
+
+        Parameters
+        ----------
+
+        software : str
+            The software whose cleaning result is supposed
+            to be plotted
+
+        exp : float, optional
+            The exponent for the matplotlib.colors.PowerNorm norm
+
+        rot90 : int, optional
+            The amount of times the image is supposed to be rotated
+            90 degrees counterclockwise
+
+        invert_x : bool, optional
+            Whether the image should be inverted on the x-axis
+
+        invert_y : bool, optional
+            Whether the image should be inverted on the y-axis
+
+        cut_negative_flux : bool, optional
+            Whether to set all negative fluxdensities to zero
+
+        show_beam : bool optional
+            Whether to show the beam size and position angle
+            as a white ellipse in the corner
+
+        flux_per_beam : bool, optional
+            Whether to use Jy/beam as a unit. If set to False
+            Jy/px is used
+
+        save_to : str, optional
+            Path to save the figure to
+
+        save_args : str, optional
+            The arguments for the savefig function
+
+        plot_args : dict, optional
+            The arguments for the pyplot imshow plot of the
+            cleaned image
+
+        colorbar_shrink : float, optional
+            The shrink parameter for the colorbar
+
+        annotation : str, optional
+            The label the plot is supposed to have, None for no label
+
+        return_image : bool, optional
+            Whether to return the image matrix additionally
+            to the figure and axis
+
+        fig : matplotlib.figure.Figure, optional
+            A figure to put the plot into
+
+        ax : matplotlib.axes._axes.Axes, optional
+            A axis to put the plot into
+
+        """
+
         if None in (fig, ax) and not all(x is None for x in (fig, ax)):
             raise KeyError(
                 "The parameters ax and fig have to be both None or not None!"
@@ -526,6 +821,68 @@ class Simulation:
         fig=None,
         ax=None,
     ):
+        """
+        Plots the result of the WSCLEAN cleaning of a simulation
+
+        Parameters
+        ----------
+
+        software : str
+            The software whose cleaning result is supposed
+            to be plotted
+
+        exp : float, optional
+            The exponent for the matplotlib.colors.PowerNorm norm
+
+        rot90 : int, optional
+            The amount of times the image is supposed to be rotated
+            90 degrees counterclockwise
+
+        invert_x : bool, optional
+            Whether the image should be inverted on the x-axis
+
+        invert_y : bool, optional
+            Whether the image should be inverted on the y-axis
+
+        cut_negative_flux : bool, optional
+            Whether to set all negative fluxdensities to zero
+
+        show_beam : bool optional
+            Whether to show the beam size and position angle
+            as a white ellipse in the corner
+
+        flux_per_beam : bool, optional
+            Whether to use Jy/beam as a unit. If set to False
+            Jy/px is used
+
+        save_to : str, optional
+            Path to save the figure to
+
+        save_args : str, optional
+            The arguments for the savefig function
+
+        plot_args : dict, optional
+            The arguments for the pyplot imshow plot of the
+            cleaned image
+
+        colorbar_shrink : float, optional
+            The shrink parameter for the colorbar
+
+        annotation : str, optional
+            The label the plot is supposed to have, None for no label
+
+        return_image : bool, optional
+            Whether to return the image matrix additionally
+            to the figure and axis
+
+        fig : matplotlib.figure.Figure, optional
+            A figure to put the plot into
+
+        ax : matplotlib.axes._axes.Axes, optional
+            A axis to put the plot into
+
+        """
+
         if None in (fig, ax) and not all(x is None for x in (fig, ax)):
             raise KeyError(
                 "The parameters ax and fig have to be both None or not None!"
@@ -607,6 +964,10 @@ class Simulation:
             return fig, ax, np.rot90(img, rot90)
 
     def _simulate_casa(self):
+        """
+        Internal function to perform the simobserve simulation
+        """
+
         self._ch_projectdir()
 
         conf = self.config_casa
@@ -635,6 +996,9 @@ class Simulation:
         self._ch_parentdir()
 
     def _simulate_pyvisgen(self):
+        """
+        Internal function to perform the pyvisgen simulation
+        """
         conf = self.config_pyvisgen
 
         if conf is None:
@@ -678,6 +1042,16 @@ class Simulation:
         )
 
     def get_gridder(self, software):
+        """
+        Get the radiotools.gridding.Gridder for a simulation
+
+        Parameters
+        ----------
+
+        software : str
+            The software whose results to get the gridder for
+
+        """
         match software:
             case "pyvisgen":
                 return Gridder.from_fits(
@@ -707,6 +1081,51 @@ class Simulation:
         wsclean_img_args={},
         tclean_img_args={},
     ):
+        """
+        Creates a comprehensive image of the results
+        and exports the results if wanted
+
+        Parameters
+        ----------
+
+        archive : bool, optional
+            Whether to create a directory to save the result pdfs
+            and the current configuration file to
+
+        compress : bool, optional
+            Whether to create a zip-archive of the created directory,
+            requires archive parameter to be True
+
+        keep_directory : bool, optional
+            Whether to keep the directory after creating the zip archive,
+            requires archive and compress parameters to be True
+
+        save_args : dict, optional
+            The arguments for the savefig function
+
+        softwares : tuple or array_like, optional
+            The softwares whose results are supposed to be plotted
+
+        skymodel_plot_args : dict, optional
+            The arguments for the call of simulation_chain.Skymodel.plot_clean
+
+        mask_plot_args : dict, optional
+            The arguments for the call of Gridder.plot_mask
+
+        mask_abs_args : dict, optional
+            The arguments for the call of Gridder.plot_mask_absolute
+
+        dirty_img_args : dict, optional
+            The arguments for the call of Gridder.plot_dirty_image
+
+        wsclean_img_args : dict, optional
+            The arguments for the call of plot_wsclean_result
+
+        tclean_img_args : dict, optional
+            The arguments for the call of plot_tclean_result
+
+        """
+
         if archive:
             archive_path = Path(self._project_dir) / "archive"
 
@@ -848,6 +1267,15 @@ class Simulation:
 
     @classmethod
     def load_from_cfg(cls, project_path):
+        """
+        Loads a Simulation from an existing project
+
+        Parameters
+        ----------
+        project_path : str, path to the project to load
+
+        """
+
         config_dir = Path(f"{project_path}/configs")
 
         if not config_dir.is_dir():
@@ -883,7 +1311,28 @@ class Simulation:
 
 
 class Skymodel:
+    """
+    The skymodel class for radiointerferometic simulations
+    """
+
     def __init__(self, path, source_name, cleaned_path=None):
+        """
+        Create a new Skymodel
+
+        Parameters
+        ----------
+
+        path : str
+            The path to the FITS file of the uncleaned (!) skymodel
+
+        source_name : str
+            Name of the source
+
+        cleaned_path : str, optional
+            The path to the FITS file of the cleaned (!) skymodel
+
+        """
+
         self.name = source_name
         self.original_path = str(Path(path).resolve())
         self.cleaned_path = (
@@ -894,6 +1343,10 @@ class Skymodel:
             self.flux_per_beam = fits.open(cleaned_path)[0].header["BUNIT"] == "Jy/beam"
 
     def get_metadata(self):
+        """
+        Get the metadata of the skymodel
+        """
+
         f = fits.open(self.cleaned_path)[0]
         header = f.header
 
@@ -918,15 +1371,30 @@ class Skymodel:
         }
 
     def get_info(self):
+        """
+        Get an overview of the skymodel's properties
+        """
+
         return {"source_name": self.name} | self.get_metadata()
 
     def get_cleaned_model(self):
+        """
+        Get the image data of the cleaned skymodel
+        """
+
         return fits.open(self.cleaned_path)[0].data[0]
 
     def get_original_model(self):
+        """
+        Get the image data of the uncleaned skymodel
+        """
+
         return fits.open(self.original_path)[0].data[0]
 
     def _get_filename(self):
+        """
+        Intenal function to retrieve the filename of the original model
+        """
         return self.original_path.split(".fits")[0]
 
     def clean(
@@ -939,6 +1407,36 @@ class Skymodel:
         flux_per_beam=False,
         overwrite=False,
     ):
+        """
+        Clean the original skymodel from noise and negative values
+
+        Parameters
+        ----------
+        crop : tuple of arrays, optional
+            The cutout of the image to use for the cleaned model
+            (e.g. ([-10, 10], [-15, 15])
+
+        intensity_cut : float, optional
+            The intensity below which every value is assumed as zero
+
+        rms_cut_args : dict, optional
+            The arguments to pass to the radio_stats.rms_cut method
+
+        dbscan_args : dict, optional
+            The arguments to pass to the radio_stats.dbscan_clean method
+
+        output_path : str, optional
+            The path to save the cleaned model to (if None same directory
+            is used and name is appended a '_cleaned' suffix)
+
+        flux_per_beam : bool, optional
+            Whether to save the cleaned model in the unit Jy/beam. If False
+            Jy/px is used.
+
+        overwrite : bool, optional
+            Whether to overwrite an existing cleaned model
+        """
+
         if output_path is None:
             cleaned_path = str(Path(f"{self._get_filename()}_cleaned.fits").resolve())
         else:
@@ -1006,6 +1504,45 @@ class Skymodel:
         fig=None,
         ax=None,
     ):
+        """
+        Plots the cleaned model
+
+        Parameters
+        ----------
+        exp : float, optional
+            The exponent for the matplotlib.colors.PowerNorm norm
+
+        crop : tuple of arrays, optional
+            The cutout of the image to use for the plot
+            (e.g. ([-10, 10], [-15, 15])
+
+        plot_args : dict, optional
+            The arguments for the pyplot imshow plot of the cleaned model
+
+        colorbar_shrink : float, optional
+            The shrink parameter for the colorbar
+
+        save_to : str, optional
+            Path to save the figure to
+
+        save_args : str, optional
+            The arguments for the savefig function
+
+        show_beam : bool, optional
+            Whether to show the size and position angle of the
+            beam as a white ellipse in the corner of the plot
+
+        annotation : str, optional
+            The label the plot is supposed to have, None for no label
+
+        fig : matplotlib.figure.Figure, optional
+            A figure to put the plot into
+
+        ax : matplotlib.axes._axes.Axes, optional
+            A axis to put the plot into
+
+        """
+
         skymodel = fits.open(self.cleaned_path)[0].data[0, 0]
 
         if None in (fig, ax) and not all(x is None for x in (fig, ax)):
@@ -1070,6 +1607,45 @@ class Skymodel:
         fig=None,
         ax=None,
     ):
+        """
+        Plots the uncleaned model
+
+        Parameters
+        ----------
+        exp : float, optional
+            The exponent for the matplotlib.colors.PowerNorm norm
+
+        crop : tuple of arrays, optional
+            The cutout of the image to use for the plot
+            (e.g. ([-10, 10], [-15, 15])
+
+        plot_args : dict, optional
+            The arguments for the pyplot imshow plot of the uncleaned model
+
+        colorbar_shrink : float, optional
+            The shrink parameter for the colorbar
+
+        save_to : str, optional
+            Path to save the figure to
+
+        save_args : str, optional
+            The arguments for the savefig function
+
+        show_beam : bool, optional
+            Whether to show the size and position angle of the
+            beam as a white ellipse in the corner of the plot
+
+        annotation : str, optional
+            The label the plot is supposed to have, None for no label
+
+        fig : matplotlib.figure.Figure, optional
+            A figure to put the plot into
+
+        ax : matplotlib.axes._axes.Axes, optional
+            A axis to put the plot into
+
+        """
+
         f = fits.open(self.original_path)[0]
         skymodel = f.data[0, 0]
 
@@ -1138,6 +1714,28 @@ class Skymodel:
         save_args={},
         figsize=[10, 10],
     ):
+        """
+        Plots the uncleaned model
+
+        Parameters
+        ----------
+        original_args : dict, optional
+            The arguments to pass to the plot_clean function
+
+        clean_args : dict, optional
+            The arguments to pass to the plot_original function
+
+        save_to : str, optional
+            Path to save the figure to
+
+        save_args : str, optional
+            The arguments for the savefig function
+
+        figsize : array_like, optional
+            The size of the figure
+
+        """
+
         fig, ax = plt.subplots(1, 2, layout="constrained", figsize=figsize)
 
         ax[0].set_title("Originales Modell")
