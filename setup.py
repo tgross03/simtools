@@ -7,14 +7,14 @@ setup(
     author="Tom Groß",
     install_requires=[
         "numpy",
+        "matplotlib",
         "pyvisgen",
         "radiotools",
+        "radio_stats",
         "casatools",
         "casatasks",
         "casadata",
-        "python-casacore",
         "astropy",
-        "matplotlib",
-        "casadata",
+        "yaml",
     ],
 )
