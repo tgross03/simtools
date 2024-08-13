@@ -1395,7 +1395,6 @@ class Skymodel:
     def clean(
         self,
         crop=([None, None], [None, None]),
-        intensity_cut=0,
         rms_cut_args={"sigma": 2.9},
         dbscan_args={"min_brightness": 1e-4},
         output_path=None,
@@ -1410,9 +1409,6 @@ class Skymodel:
         crop : tuple of arrays, optional
             The cutout of the image to use for the cleaned model
             (e.g. ([-10, 10], [-15, 15])
-
-        intensity_cut : float, optional
-            The intensity below which every value is assumed as zero
 
         rms_cut_args : dict, optional
             The arguments to pass to the radio_stats.rms_cut method
@@ -1453,7 +1449,6 @@ class Skymodel:
         skymodel_cleaned = rms_cut(skymodel, **rms_cut_args)
         skymodel_cleaned = dbscan_clean(skymodel_cleaned, **dbscan_args)
 
-        skymodel_cleaned[skymodel_cleaned < intensity_cut] = intensity_cut
         skymodel_cleaned = skymodel_cleaned[
             crop[0][0] : crop[0][1], crop[1][0] : crop[1][1]
         ]
@@ -1548,7 +1543,9 @@ class Skymodel:
         if ax is None:
             fig, ax = plt.subplots()
 
-        crop = ([0, skymodel.shape[0]], [0, skymodel.shape[0]])
+            
+        if crop == ([None, None], [None, None]):
+            crop = ([0, skymodel.shape[0]], [0, skymodel.shape[0]])
 
         im = ax.imshow(skymodel, norm=PowerNorm(gamma=exp), **plot_args, origin="lower")
 
@@ -1662,7 +1659,8 @@ class Skymodel:
                 model_incell=cell_size,
             )
 
-        crop = ([0, skymodel.shape[0]], [0, skymodel.shape[0]])
+        if crop == ([None, None], [None, None]):
+            crop = ([0, skymodel.shape[0]], [0, skymodel.shape[0]])
 
         im = ax.imshow(skymodel, norm=PowerNorm(gamma=exp), **plot_args, origin="lower")
 
@@ -1710,7 +1708,7 @@ class Skymodel:
         figsize=[10, 10],
     ):
         """
-        Plots the uncleaned model
+        Plots the uncleaned and cleaned model as a comparison
 
         Parameters
         ----------
