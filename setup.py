@@ -15,6 +15,5 @@ setup(
         "casatasks",
         "casadata",
         "astropy",
-        "yaml",
     ],
 )

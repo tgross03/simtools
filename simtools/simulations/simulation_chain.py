@@ -148,7 +148,7 @@ def _plot_label(text, ax):
         text,
         ax,
         pos=(0.05, 0.95),
-        text_options=dict(fontsize=15),
+        text_options=dict(fontsize=15, color="black"),
         bbox=dict(
             facecolor="lightgray", alpha=0.8, edgecolor="black", boxstyle="round"
         ),
