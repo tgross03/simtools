@@ -810,7 +810,7 @@ class Simulation:
         flux_per_beam=True,
         save_to=None,
         save_args={},
-        plot_args={"cmap": "inferno", "interpolation":"none"},
+        plot_args={"cmap": "inferno", "interpolation": "none"},
         colorbar_shrink=1,
         annotation=None,
         return_image=False,
@@ -1485,7 +1485,7 @@ class Skymodel:
         self,
         exp=1,
         crop=([None, None], [None, None]),
-        plot_args={"cmap": "inferno", "interpolation":"none"},
+        plot_args={"cmap": "inferno", "interpolation": "none"},
         colorbar_shrink=1,
         save_to=None,
         save_args={},
@@ -1543,7 +1543,6 @@ class Skymodel:
         if ax is None:
             fig, ax = plt.subplots()
 
-            
         if crop == ([None, None], [None, None]):
             crop = ([0, skymodel.shape[0]], [0, skymodel.shape[0]])
 
@@ -1589,7 +1588,7 @@ class Skymodel:
         self,
         exp=1,
         crop=([None, None], [None, None]),
-        plot_args={"cmap": "inferno", "interpolation":"none"},
+        plot_args={"cmap": "inferno", "interpolation": "none"},
         colorbar_shrink=1,
         save_to=None,
         save_args={},
