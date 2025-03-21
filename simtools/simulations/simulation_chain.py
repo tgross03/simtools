@@ -497,7 +497,7 @@ class Simulation:
         -auto-mask 5 \
         -gain 0.1 \
         -padding 1 \
-        {'-quiet' if not verbose else ""} \
+        {"-quiet" if not verbose else ""} \
         {self._project_dir}/{software}/{ms_name}
         """
 
@@ -520,7 +520,7 @@ class Simulation:
         -auto-mask 3 \
         -gain 0.1 \
         -padding 1 \
-        {'-quiet' if not verbose else ""} \
+        {"-quiet" if not verbose else ""} \
         {self._project_dir}/{software}/{ms_name}
         """
 
@@ -631,9 +631,6 @@ class Simulation:
         self,
         software,
         exp=1,
-        rot90=0,
-        invert_x=False,
-        invert_y=False,
         cut_negative_flux=False,
         show_beam=True,
         flux_per_beam=True,
@@ -658,16 +655,6 @@ class Simulation:
 
         exp : float, optional
             The exponent for the matplotlib.colors.PowerNorm norm
-
-        rot90 : int, optional
-            The amount of times the image is supposed to be rotated
-            90 degrees counterclockwise
-
-        invert_x : bool, optional
-            Whether the image should be inverted on the x-axis
-
-        invert_y : bool, optional
-            Whether the image should be inverted on the y-axis
 
         cut_negative_flux : bool, optional
             Whether to set all negative fluxdensities to zero
@@ -755,12 +742,6 @@ class Simulation:
         if cut_negative_flux:
             img[img < 0] = 0
 
-        if invert_x:
-            img = np.fliplr(img)
-
-        if invert_y:
-            img = np.flipud(img)
-
         if not flux_per_beam:
             img /= calculate_beam_correction(
                 bmin=beam_info["bmin"], bmaj=beam_info["bmaj"], model_incell=cell_size
@@ -771,7 +752,7 @@ class Simulation:
         norm = None if exp == 1 else PowerNorm(gamma=exp)
 
         im = ax.imshow(
-            np.rot90(img, rot90) * multiplier,
+            img * multiplier,
             interpolation="none",
             origin="lower",
             norm=norm,
@@ -794,7 +775,7 @@ class Simulation:
             fig.savefig(save_to, **save_args)
 
         if return_image:
-            return fig, ax, np.rot90(img, rot90) * multiplier
+            return fig, ax, img * multiplier
         else:
             return fig, ax
 
@@ -802,9 +783,6 @@ class Simulation:
         self,
         software,
         exp=1,
-        rot90=0,
-        invert_x=False,
-        invert_y=False,
         cut_negative_flux=False,
         show_beam=True,
         flux_per_beam=True,
@@ -829,16 +807,6 @@ class Simulation:
 
         exp : float, optional
             The exponent for the matplotlib.colors.PowerNorm norm
-
-        rot90 : int, optional
-            The amount of times the image is supposed to be rotated
-            90 degrees counterclockwise
-
-        invert_x : bool, optional
-            Whether the image should be inverted on the x-axis
-
-        invert_y : bool, optional
-            Whether the image should be inverted on the y-axis
 
         cut_negative_flux : bool, optional
             Whether to set all negative fluxdensities to zero
@@ -918,12 +886,6 @@ class Simulation:
         if cut_negative_flux:
             img[img < 0] = 0
 
-        if invert_x:
-            img = np.fliplr(img)
-
-        if invert_y:
-            img = np.flipud(img)
-
         if not flux_per_beam:
             img /= calculate_beam_correction(
                 bmin=beam_info["bmin"], bmaj=["bmaj"], model_incell=cell_size
@@ -934,7 +896,7 @@ class Simulation:
         norm = None if exp == 1 else PowerNorm(gamma=exp)
 
         im = ax.imshow(
-            np.rot90(img, rot90) * multiplier,
+            img * multiplier,
             origin="lower",
             norm=norm,
             **plot_args,
@@ -956,7 +918,7 @@ class Simulation:
             fig.savefig(save_to, **save_args)
 
         if return_image:
-            return fig, ax, np.rot90(img, rot90)
+            return fig, ax, img
 
     def _simulate_casa(self):
         """
@@ -975,10 +937,10 @@ class Simulation:
         simobserve(
             project="casa",
             skymodel=self.skymodel.cleaned_path,
-            incell=f'{self.metadata["cell_size"] * self.fov_multiplier}arcsec',
-            incenter=f'{self.metadata["frequency"]}Hz',
-            inwidth=f'{self.metadata["bandwidth"]}Hz',
-            antennalist=f'{conf["array_layout"]}.cfg',
+            incell=f"{self.metadata['cell_size'] * self.fov_multiplier}arcsec",
+            incenter=f"{self.metadata['frequency']}Hz",
+            inwidth=f"{self.metadata['bandwidth']}Hz",
+            antennalist=f"{conf['array_layout']}.cfg",
             obsmode="int",
             setpointings=True,
             refdate=obs_time.strftime("%Y/%m/%d/%H:%M:%S"),
@@ -1194,14 +1156,14 @@ class Simulation:
                         axis.axis("off")
 
                         config_text = (
-                            f'img_size:\t{skymodel_metadata["img_size"]} px^2\n'
+                            f"img_size:\t{skymodel_metadata['img_size']} px^2\n"
                         )
-                        config_text += f'cell_size:\t{skymodel_metadata["cell_size"]} * {obs_config["fov_multiplier"]} asec/px\n'
-                        config_text += f'fov:\t\t{skymodel_metadata["fov"]} * {obs_config["fov_multiplier"]} asec\n'
+                        config_text += f"cell_size:\t{skymodel_metadata['cell_size']} * {obs_config['fov_multiplier']} asec/px\n"
+                        config_text += f"fov:\t\t{skymodel_metadata['fov']} * {obs_config['fov_multiplier']} asec\n"
                         config_text += (
-                            f'scan_duration:\t{obs_config["scan_duration"]} s\n'
+                            f"scan_duration:\t{obs_config['scan_duration']} s\n"
                         )
-                        config_text += f'int_time:\t{obs_config["integration_time"]} s'
+                        config_text += f"int_time:\t{obs_config['integration_time']} s"
 
                         plot_text(config_text.expandtabs(), ax=axis)
                     case "MASK":
