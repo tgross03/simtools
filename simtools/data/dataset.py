@@ -45,9 +45,7 @@ class Dataset:
 
     """
 
-    def __init__(
-        self, data_path: str, required_pattern: str or None = None, image_key: str = "y"
-    ):
+    def __init__(self, data_path: str, required_pattern: str or None = None):
         self.data_path = Path(data_path)
         if not (self.data_path.is_dir() or self.data_path.is_file()):
             raise IOError("The provided path neither contains a director nor a file!")
@@ -62,7 +60,7 @@ class Dataset:
             self._file_paths = [x for x in p if x.is_file()]
 
             if len(self._file_paths) == 0:
-                raise IOError(
+                raise FileNotFoundError(
                     "The provided directory does not "
                     "contain files matching the pattern!"
                 )
@@ -96,7 +94,7 @@ class Dataset:
 
     """
 
-    def _get_index(self, i):
+    def _get_index(self, i: int):
         return i // self._batch_size, i % self._batch_size
 
     """
@@ -127,7 +125,7 @@ class Dataset:
 
     """
 
-    def __getitem__(self, i):
+    def __getitem__(self, i: int):
         idx = self._get_index(i)
         return self.get_image(idx[0], idx[1])
 
@@ -150,7 +148,7 @@ class Dataset:
 
     """
 
-    def get_image(self, batch_idx, in_batch_idx):
+    def get_image(self, batch_idx: int, in_batch_idx: int):
         with h5py.File(self._file_paths[batch_idx], "r") as hf:
             return (
                 torch.from_numpy(hf["y"][()])[in_batch_idx],
@@ -181,7 +179,7 @@ class Dataset:
 
     """
 
-    def plot_models(self, idx=[0, 6], norm=None, fig=None, ax=None):
+    def plot_models(self, idx: tuple[int, int] = [0, 6], norm=None, fig=None, ax=None):
         if None in (fig, ax) and not all(x is None for x in (fig, ax)):
             raise KeyError(
                 "The parameters ax and fig have to be both None or not None!"
