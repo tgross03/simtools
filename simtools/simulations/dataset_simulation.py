@@ -8,7 +8,7 @@ from pyvisgen.simulation.observation import Observation
 from pyvisgen.simulation.visibility import vis_loop
 from pyvisgen.fits.writer import create_hdu_list
 
-import astropy
+from astropy import iers
 
 import toml
 
@@ -18,7 +18,7 @@ from tqdm.notebook import tqdm
 
 import logging
 
-astropy.utils.iers.conf.iers_degraded_accuracy = "warn"
+iers.conf.iers_degraded_accuracy = "warn"
 
 torch._logging.set_logs(
     dynamo=logging.CRITICAL, aot=logging.CRITICAL, inductor=logging.CRITICAL

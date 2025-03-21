@@ -5,14 +5,14 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 
-import astropy
+from astropy.utils import iers
 
 import h5py
 
 
 import logging
 
-astropy.utils.iers.conf.iers_degraded_accuracy = "warn"
+iers.conf.iers_degraded_accuracy = "warn"
 
 torch._logging.set_logs(
     dynamo=logging.CRITICAL, aot=logging.CRITICAL, inductor=logging.CRITICAL
