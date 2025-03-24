@@ -84,7 +84,24 @@ class DataCache:
         self.cleaning_policy = cleaning_policy
 
     def __getitem__(self, i):
-        return self._records[str(i)] if str(i) in self._records else None
+        batch_idx, in_batch_idx = i
+        record = (
+            self._records[str(batch_idx)] if str(batch_idx) in self._records else None
+        )
+
+        if record is None:
+            return None
+
+        if len(record["data"][1]) - 1 < in_batch_idx:
+            raise IndexError(
+                f"The given in_batch index is too large! (max. {len(record['data'][1] - 1)})"
+            )
+
+        return (
+            record["data"][0][in_batch_idx],
+            record["data"][1][in_batch_idx],
+            record["data"][2],
+        )
 
     def __len__(self):
         return len(self._records)
@@ -310,24 +327,22 @@ class Dataset:
     """
 
     def get_image(self, batch_idx: int, in_batch_idx: int):
-        idx = self._get_index(batch_idx, in_batch_idx)
-
         if self._cache is not None:
-            cached_data = self._cache[idx]
+            cached_data = self._cache[batch_idx, in_batch_idx]
             if cached_data is not None:
-                return cached_data["data"]
+                return cached_data
 
         with h5py.File(self._file_paths[batch_idx], "r") as hf:
             data = (
-                torch.from_numpy(hf["y"][()])[in_batch_idx],
-                list(eval(hf["metadata"].asstr()[()]))[in_batch_idx],
+                torch.from_numpy(hf["y"][()]),
+                list(eval(hf["metadata"].asstr()[()])),
                 eval(hf["params"].asstr()[()]),
             )
 
             if self._cache is not None:
-                self._cache.add(idx, data)
+                self._cache.add(batch_idx, data)
 
-            return data
+            return (data[0][in_batch_idx], data[1][in_batch_idx], data[2])
 
     """
     Plots the images contained in the dataset.
