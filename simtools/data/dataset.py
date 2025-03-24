@@ -12,6 +12,8 @@ from astropy.utils import iers
 
 import h5py
 
+import re
+
 
 import logging
 
@@ -228,6 +230,13 @@ class Dataset:
         if self.data_path.is_dir():
             p = self.data_path.glob(pattern)
             self._file_paths = [x for x in p if x.is_file()]
+
+            # Sorting method taken from
+            # https://github.com/nkmk/python-snippets/blob/077080d5686ee1731a477b282a7dc549333aebd2/notebook/sort_num_str_re.py#L14-L20
+
+            self._file_paths = sorted(
+                self._file_paths, key=lambda s: int(re.search(r"\d+", s.stem).group())
+            )
 
             if len(self._file_paths) == 0:
                 raise FileNotFoundError(

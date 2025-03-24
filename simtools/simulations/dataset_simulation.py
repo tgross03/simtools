@@ -16,7 +16,7 @@ import toml
 
 from datetime import datetime
 
-from tqdm.notebook import tqdm
+from tqdm.autonotebook import tqdm
 
 import logging
 
@@ -142,7 +142,7 @@ class DatasetSimulation:
         end_index: int or None = None,
         fov_multiplier: float = 1,
         show_individual_progress: bool = False,
-        generate_config: bool = True,
+        generate_config: bool = False,
         overwrite: bool = True,
         verbose: bool = False,
         return_obs: bool = False,
@@ -160,6 +160,7 @@ class DatasetSimulation:
                 start_index, len(self.dataset) if end_index is None else end_index
             ),
             desc="Dataset Simulation",
+            # position=0,
         ):
             model, mdata, params = self.dataset[i]
 
