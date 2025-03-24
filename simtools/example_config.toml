@@ -1,0 +1,36 @@
+# This is a TOML document.
+
+[sampling_options]
+mode = "grid"
+device = "cuda:0"
+seed = 42
+layout = "alma_cycle4_9"
+corr_int_time = 10.0
+scan_start = ["01-07-2014 00:00:01", "03-07-2014 23:59:59"]
+scan_duration = [7200, 7201]
+num_scans = 1
+scan_separation = 0
+ref_frequency = 230e9
+frequency_offsets = [0]
+bandwidths = [18e9]
+noisy = 0
+corrupted = true
+sensitivity_cut = 1e-8
+
+[dataset]
+path = "training_sets/dataset1/"
+required_patterns = ["*train*", "*test*", "*valid*"]
+cache_loaded = true
+max_cache_size = "12G"
+cache_cleaning_policy = "oldest"
+
+[simulation_options]
+out = "visibility_sims/dataset1_test/"
+out_prefix = "vis"
+batch_size = "auto"
+start_indices = [0, 0]                 # [pattern_index (e.g. 0 for "*train*")]
+fov_multiplier = 1
+show_individual_progress = false
+generate_config = false
+overwrite = true
+verbose = false

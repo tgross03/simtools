@@ -10,13 +10,13 @@ from pyvisgen.fits.writer import create_hdu_list
 
 from simtools.data import Dataset
 
-from astropy import iers
+from astropy.utils import iers
 
 import toml
 
 from datetime import datetime
 
-from tqdm.notebook import tqdm
+from tqdm.autonotebook import tqdm
 
 import logging
 
@@ -142,7 +142,7 @@ class DatasetSimulation:
         end_index: int or None = None,
         fov_multiplier: float = 1,
         show_individual_progress: bool = False,
-        generate_config: bool = True,
+        generate_config: bool = False,
         overwrite: bool = True,
         verbose: bool = False,
         return_obs: bool = False,
@@ -160,6 +160,7 @@ class DatasetSimulation:
                 start_index, len(self.dataset) if end_index is None else end_index
             ),
             desc="Dataset Simulation",
+            # position=0,
         ):
             model, mdata, params = self.dataset[i]
 
@@ -204,7 +205,7 @@ class DatasetSimulation:
 
             vis_data = vis_loop(
                 obs,
-                torch.from_numpy(model)[None],
+                model[None],
                 noisy=self.config["noisy"],
                 mode=self.config["mode"],
                 batch_size=batch_size,
@@ -216,15 +217,15 @@ class DatasetSimulation:
 
             out.mkdir(parents=True, exist_ok=True)
 
-            batch_idx, img_idx = self.dataset._get_index(i)
-            name = f"{out_prefix}_{self.dataset._file_paths[batch_idx].stem}"
+            batch_idx, img_idx = self.dataset._get_batch_indices(i)
+            name = f"{out_prefix}_{self.dataset._file_paths[batch_idx].stem}_{img_idx}"
 
-            hdu_list.writeto(out / f"{name}_{img_idx}.fits", overwrite=overwrite)
+            hdu_list.writeto(out / f"{name}.fits", overwrite=overwrite)
 
             if generate_config:
-                with open(out / f"{name}_config_{img_idx}.toml", "w") as f:
+                with open(out / f"{name}_config.toml", "w") as f:
                     toml.dump(dict(sampling_options=obs_data), f)
 
             torch.cuda.empty_cache()
 
-            return observations if return_obs else None
+        return observations if return_obs else None
