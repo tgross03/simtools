@@ -11,7 +11,7 @@ except Exception:
     import warnings
 
     warnings.warn(
-        "Could not determine pyvisgen version. This indicates"
+        "Could not determine simtools version. This indicates"
         " a broken installation. Please install simtools from"
         " the local git repository."
     )
