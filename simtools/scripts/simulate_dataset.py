@@ -1,11 +1,10 @@
+import warnings
+
+import click
 import toml
 
 from simtools.data import Dataset
 from simtools.simulations import DatasetSimulation
-
-import click
-
-import warnings
 
 warnings.filterwarnings("ignore")
 

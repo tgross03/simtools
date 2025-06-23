@@ -1,24 +1,18 @@
-import numpy as np
-import torch
-import pandas as pd
-
+import logging
+from datetime import datetime
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
+import toml
+import torch
+from astropy.utils import iers
+from pyvisgen.fits.writer import create_hdu_list
 from pyvisgen.simulation.observation import Observation
 from pyvisgen.simulation.visibility import vis_loop
-from pyvisgen.fits.writer import create_hdu_list
-
-from simtools.data import Dataset
-
-from astropy.utils import iers
-
-import toml
-
-from datetime import datetime
-
 from tqdm.autonotebook import tqdm
 
-import logging
+from simtools.data import Dataset
 
 iers.conf.iers_degraded_accuracy = "warn"
 
@@ -28,7 +22,6 @@ torch._logging.set_logs(
 
 
 class DatasetSimulation:
-
     def __init__(self, dataset: Dataset, config: str):
         """
 
@@ -44,7 +37,7 @@ class DatasetSimulation:
 
         """
         self.dataset = dataset
-        self.config = toml.load(config)["sampling_options"] 
+        self.config = toml.load(config)["sampling_options"]
 
     def _random_date(
         self,
@@ -80,7 +73,7 @@ class DatasetSimulation:
         )
         return rng.choice(
             [datetime.strptime(time, "%d-%m-%Y %H:%M:%S") for time in start_times]
-        ) 
+        )
 
     def simulate_dataset(
         self,

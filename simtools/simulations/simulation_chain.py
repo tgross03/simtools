@@ -1,56 +1,48 @@
 # IMPORTS
 
 # python libraries
-import subprocess
-
-import os
-
-import shutil
-import warnings
-import numpy as np
 import datetime
-import torch
-import pandas as pd
-
 import logging
-
-# PyYAML
-import yaml
-
-# matplotlib
-import matplotlib.pyplot as plt
-
-from matplotlib.colors import PowerNorm
-
-from matplotlib.patches import Ellipse
+import os
+import shutil
+import subprocess
+import warnings
 
 # pathlib
 from pathlib import Path
 
-# astropy
-from astropy.io import fits
+# matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import pyvisgen.fits.writer as writer
+import torch
+
+# PyYAML
+import yaml
 from astropy.constants import c
 
+# astropy
+from astropy.io import fits
+
+# casa
+from casatasks import simanalyze, simobserve
+from casatools.table import table
+from matplotlib.colors import PowerNorm
+from matplotlib.patches import Ellipse
+from pyvisgen.simulation.observation import Observation
 
 # pyvisgen
 from pyvisgen.simulation.visibility import vis_loop
-from pyvisgen.simulation.observation import Observation
-import pyvisgen.fits.writer as writer
-
-
-# radiotools
-from radiotools.visibility import SourceVisibility
-
-from radiotools.measurements import Measurement
-from radiotools.gridding import Gridder
+from radio_stats.cuts.dbscan_clean import dbscan_clean
 
 # radio_stats
 from radio_stats.cuts.dyn_range import rms_cut
-from radio_stats.cuts.dbscan_clean import dbscan_clean
+from radiotools.gridding import Gridder
+from radiotools.measurements import Measurement
 
-# casa
-from casatasks import simobserve, simanalyze
-from casatools.table import table
+# radiotools
+from radiotools.visibility import SourceVisibility
 
 # torch dynamo logging
 torch._logging.set_logs(
@@ -1122,7 +1114,8 @@ class Simulation:
 
             if software == "pyvisgen":
                 fig.suptitle(
-                    f"Beobachtung von {self.skymodel.name}\n[ {software} ({self.config_pyvisgen['mode']})]"
+                    f"Beobachtung von {self.skymodel.name}\n"
+                    f"[ {software} ({self.config_pyvisgen['mode']})]"
                 )
             else:
                 fig.suptitle(f"Beobachtung von {self.skymodel.name}\n[ {software} ]")
@@ -1158,8 +1151,14 @@ class Simulation:
                         config_text = (
                             f"img_size:\t{skymodel_metadata['img_size']} px^2\n"
                         )
-                        config_text += f"cell_size:\t{skymodel_metadata['cell_size']} * {obs_config['fov_multiplier']} asec/px\n"
-                        config_text += f"fov:\t\t{skymodel_metadata['fov']} * {obs_config['fov_multiplier']} asec\n"
+                        config_text += (
+                            f"cell_size:\t{skymodel_metadata['cell_size']} * "
+                            + f"{obs_config['fov_multiplier']} asec/px\n"
+                        )
+                        config_text += (
+                            f"fov:\t\t{skymodel_metadata['fov']} * "
+                            + f"{obs_config['fov_multiplier']} asec\n"
+                        )
                         config_text += (
                             f"scan_duration:\t{obs_config['scan_duration']} s\n"
                         )

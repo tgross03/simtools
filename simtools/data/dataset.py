@@ -1,23 +1,14 @@
-import numpy as np
-import torch
-import matplotlib.pyplot as plt
-
+import logging
+import re
+import sys
+import warnings
 from pathlib import Path
 
-
-import sys
-
-
-from astropy.utils import iers
-
 import h5py
-
-import re
-
-
-import logging
-
-import warnings
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+from astropy.utils import iers
 
 iers.conf.iers_degraded_accuracy = "warn"
 
@@ -68,8 +59,8 @@ class DataCache:
                         f"The valid unit prefixes are: {VALID_UNIT_PREFIXES.keys()}"
                     )
 
-                self._max_size = (
-                    int(max_size[:-1]) * 10 ** (VALID_UNIT_PREFIXES[max_size[-1]])
+                self._max_size = int(max_size[:-1]) * 10 ** (
+                    VALID_UNIT_PREFIXES[max_size[-1]]
                 )
             case int():
                 self._max_size = max_size
@@ -80,7 +71,8 @@ class DataCache:
 
         if cleaning_policy not in CACHE_CLEANING_POLICIES:
             raise ValueError(
-                f"The given cleaning policy does not exist! Valid values are {CACHE_CLEANING_POLICIES}"
+                f"The given cleaning policy does not exist! "
+                f"Valid values are {CACHE_CLEANING_POLICIES}"
             )
 
         self.cleaning_policy = cleaning_policy
@@ -164,7 +156,7 @@ class DataCache:
         return self(self.max_size, self.cleaning_policy)
 
 
-class Dataset: 
+class Dataset:
     def __init__(
         self,
         data_path: str,
@@ -173,50 +165,51 @@ class Dataset:
         max_cache_size: str = "12G",
         cache_cleaning_policy: str = "oldest",
     ):
-    """
+        """
 
-    Initialize a dataset containing true models from one or multiple h5-files.
+        Initialize a dataset containing true models from one or multiple h5-files.
 
-    Parameters
-    ----------
+        Parameters
+        ----------
 
-    data_path : str
-        The path to the HDF5-file or a folder with HDF5-files containing the data in three datasets:
-            1. "y" -> containing the stokes i images
-            2. "metadata" -> containing metadata of the observations (e.g. pointings etc.)
-            3. "params" -> containing the simulation parameters of the models
-        IMPORTANT: If the path is a directory with HDF5-files, all the selected files have to
-        be the same length! Otherwise this can lead to unexpected behavior!
+        data_path : str
+            The path to the HDF5-file or a folder with HDF5-files containing the
+            data in three datasets:
+                1. "y" -> containing the stokes i images
+                2. "metadata" -> containing metadata of the observations (e.g. pointings etc.)
+                3. "params" -> containing the simulation parameters of the models
+            IMPORTANT: If the path is a directory with HDF5-files, all the selected files have to
+            be the same length! Otherwise this can lead to unexpected behavior!
 
-    required_pattern : str or None, optional
-        String pattern to include (in case a directory with h5 files is given.
-        (e.g. `"*train*"` -> only files containing the phrase train somewhere in
-        their names will be loaded). If set to `None`, the pattern will be "*".
+        required_pattern : str or None, optional
+            String pattern to include (in case a directory with h5 files is given.
+            (e.g. `"*train*"` -> only files containing the phrase train somewhere in
+            their names will be loaded). If set to `None`, the pattern will be "*".
 
-    cache_loaded: bool, optional
-        Whether to save HDF5 files if they are loaded to reduce time consumption
-        of loading and unloading the same file multiple times.
-        Default is `True`.
+        cache_loaded: bool, optional
+            Whether to save HDF5 files if they are loaded to reduce time consumption
+            of loading and unloading the same file multiple times.
+            Default is `True`.
 
-        WARNING: This will increase the memory consumption of the software.
-        Additionally this means, that modifying files in runtime of the code
-        is likely not reflected in the results since they are not loaded from disk
-        but from memory.
+            WARNING: This will increase the memory consumption of the software.
+            Additionally this means, that modifying files in runtime of the code
+            is likely not reflected in the results since they are not loaded from disk
+            but from memory.
 
-    max_cache_size: str or int, optional
-        The maximum memory size of the file cache. Can be given as bytes (int)
-        or a string (e.g. `"10G"` or `"1M"`). The smaller this number, the less
-        impact the caching will have on the runtime of the code.
+        max_cache_size: str or int, optional
+            The maximum memory size of the file cache. Can be given as bytes (int)
+            or a string (e.g. `"10G"` or `"1M"`). The smaller this number, the less
+            impact the caching will have on the runtime of the code.
 
-    cache_cleaning_policy: str, optional
-        The way the program will remove files from the cache if it has reached its
-        memory limit.
-        You can choose from:
-            1. `oldest` -> the oldest file in the cache will be removed
-            2. `youngest` -> the youngest file in the cache will be removed
-            3. `largest` -> the largest file in the cache will be removed
+        cache_cleaning_policy: str, optional
+            The way the program will remove files from the cache if it has reached its
+            memory limit.
+            You can choose from:
+                1. `oldest` -> the oldest file in the cache will be removed
+                2. `youngest` -> the youngest file in the cache will be removed
+                3. `largest` -> the largest file in the cache will be removed
 
-    """
+        """
 
         self.data_path = Path(data_path)
         if not (self.data_path.is_dir() or self.data_path.is_file()):
@@ -347,7 +340,7 @@ class Dataset:
             if self._cache is not None:
                 self._cache.add(batch_idx, data)
 
-            return (data[0][in_batch_idx], data[1][in_batch_idx], data[2]) 
+            return (data[0][in_batch_idx], data[1][in_batch_idx], data[2])
 
     def plot_models(self, idx: tuple[int, int] = [0, 6], norm=None, fig=None, ax=None):
         """
