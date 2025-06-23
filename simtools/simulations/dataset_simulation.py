@@ -28,49 +28,48 @@ torch._logging.set_logs(
 
 
 class DatasetSimulation:
-    """
-
-    Initialize a pyvisgen radio interferometer simulation of a Dataset.
-
-    Parameters
-    ----------
-    dataset: simtools.data.Dataset
-        The Dataset to simulate
-
-    config: str
-        The TOML-configuration file containing the simulation parameters
-
-    """
 
     def __init__(self, dataset: Dataset, config: str):
+        """
+
+        Initialize a pyvisgen radio interferometer simulation of a Dataset.
+
+        Parameters
+        ----------
+        dataset: simtools.data.Dataset
+            The Dataset to simulate
+
+        config: str
+            The TOML-configuration file containing the simulation parameters
+
+        """
         self.dataset = dataset
-        self.config = toml.load(config)["sampling_options"]
-
-    """
-    Returns a randomized date between a range of dates.
-
-    Parameters
-    ----------
-
-    time_range: tuple[str, str]
-        The range of datetimes as strings in the format `%d-%m-%Y %H:%M:%S`.
-
-    rng: numpy.random.Generator
-        The Random Generator to use for choosing the date.
-
-    Returns
-    -------
-
-    datetime:
-        The random datetime between the given datetime range
-
-    """
+        self.config = toml.load(config)["sampling_options"] 
 
     def _random_date(
         self,
         time_range: list[str, str] or tuple[str, str],
         rng: np.random.Generator,
     ):
+        """
+        Returns a randomized date between a range of dates.
+
+        Parameters
+        ----------
+
+        time_range: tuple[str, str]
+            The range of datetimes as strings in the format `%d-%m-%Y %H:%M:%S`.
+
+        rng: numpy.random.Generator
+            The Random Generator to use for choosing the date.
+
+        Returns
+        -------
+
+        datetime:
+            The random datetime between the given datetime range
+
+        """
         if len(time_range) == 1 or isinstance(time_range, str):
             return time_range
 
@@ -81,57 +80,7 @@ class DatasetSimulation:
         )
         return rng.choice(
             [datetime.strptime(time, "%d-%m-%Y %H:%M:%S") for time in start_times]
-        )
-
-    """
-    Simulate (a selected subset of) the dataset.
-
-    Parameters
-    ----------
-
-    out: str
-        The directory to put the generated FITS files into
-
-    out_prefix: str, optional
-        The string to prepend to the output files' names
-
-    batch_size: str or int, optional
-        The amount of calculations to run in parallel. Use `"auto"` to
-        let toma determine the best size automatically.
-
-    start_index: int or None, optional
-        The index of images to start at. None indicates that the last possible
-        index is chosen.
-
-    end_index: int or None, optional
-        The index of images to end at. None indicates that the last possible
-        index is chosen.
-
-    fov_multiplier: float, optional
-        A constant factor to multiply the simulated Field of View with.
-
-    show_individual_progress: bool, optional
-        Whether pyvisgen should show a progress bar for each visibility calculation.
-
-    verbose: bool, optional
-        Whether the programm should output additional information for each calculation.
-
-    return_obs: bool, optional
-        Whether to return a list of the created
-        `pyvisgen.simulation.Observation.Observation` objects.
-
-    obs_only: bool, optional
-        Whether to only generate the `pyvisgen.simulation.Observation.Observation` objects
-        and skip the visiblity simulations.
-
-    Returns
-    -------
-
-    observations: list[pyvisgen.simulation.Observation.Observation]
-        If the `obs_only` parameter is `True`, the method will return a list
-        of the created observations.
-
-    """
+        ) 
 
     def simulate_dataset(
         self,
@@ -148,6 +97,55 @@ class DatasetSimulation:
         return_obs: bool = False,
         obs_only: bool = False,
     ):
+        """
+        Simulate (a selected subset of) the dataset.
+
+        Parameters
+        ----------
+
+        out: str
+            The directory to put the generated FITS files into
+
+        out_prefix: str, optional
+            The string to prepend to the output files' names
+
+        batch_size: str or int, optional
+            The amount of calculations to run in parallel. Use `"auto"` to
+            let toma determine the best size automatically.
+
+        start_index: int or None, optional
+            The index of images to start at. None indicates that the last possible
+            index is chosen.
+
+        end_index: int or None, optional
+            The index of images to end at. None indicates that the last possible
+            index is chosen.
+
+        fov_multiplier: float, optional
+            A constant factor to multiply the simulated Field of View with.
+
+        show_individual_progress: bool, optional
+            Whether pyvisgen should show a progress bar for each visibility calculation.
+
+        verbose: bool, optional
+            Whether the programm should output additional information for each calculation.
+
+        return_obs: bool, optional
+            Whether to return a list of the created
+            `pyvisgen.simulation.Observation.Observation` objects.
+
+        obs_only: bool, optional
+            Whether to only generate the `pyvisgen.simulation.Observation.Observation` objects
+            and skip the visiblity simulations.
+
+        Returns
+        -------
+
+        observations: list[pyvisgen.simulation.Observation.Observation]
+            If the `obs_only` parameter is `True`, the method will return a list
+            of the created observations.
+
+        """
         out = Path(out)
 
         if not out.is_dir():

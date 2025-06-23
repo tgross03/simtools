@@ -164,7 +164,15 @@ class DataCache:
         return self(self.max_size, self.cleaning_policy)
 
 
-class Dataset:
+class Dataset: 
+    def __init__(
+        self,
+        data_path: str,
+        required_pattern: str or None = None,
+        cache_loaded: bool = True,
+        max_cache_size: str = "12G",
+        cache_cleaning_policy: str = "oldest",
+    ):
     """
 
     Initialize a dataset containing true models from one or multiple h5-files.
@@ -210,14 +218,6 @@ class Dataset:
 
     """
 
-    def __init__(
-        self,
-        data_path: str,
-        required_pattern: str or None = None,
-        cache_loaded: bool = True,
-        max_cache_size: str = "12G",
-        cache_cleaning_policy: str = "oldest",
-    ):
         self.data_path = Path(data_path)
         if not (self.data_path.is_dir() or self.data_path.is_file()):
             raise IOError("The provided path neither contains a director nor a file!")
@@ -260,82 +260,78 @@ class Dataset:
         else:
             self._cache = None
 
-    """
-    Gets the indices of a specific image of the dataset as a tuple
-    of (index of batch, index in batch).
-
-    Parameters
-    ----------
-
-    i : int
-        The index of the image
-
-    Returns
-    -------
-
-    tuple[int, int]:
-        The index of the batch of the image and the index of the image in the batch
-
-    """
-
     def _get_batch_indices(self, i: int):
+        """
+        Gets the indices of a specific image of the dataset as a tuple
+        of (index of batch, index in batch).
+
+        Parameters
+        ----------
+
+        i : int
+            The index of the image
+
+        Returns
+        -------
+
+        tuple[int, int]:
+            The index of the batch of the image and the index of the image in the batch
+
+        """
         return i // self._batch_size, i % self._batch_size
 
     def _get_index(self, batch_idx: int, in_batch_idx: int):
         return batch_idx * (self._batch_size - 1) + in_batch_idx
 
-    """
-    Gets the length of the dataset.
-
-    Returns
-    -------
-    int:
-        The length of the dataset.
-    """
-
     def __len__(self):
+        """
+        Gets the length of the dataset.
+
+        Returns
+        -------
+        int:
+            The length of the dataset.
+        """
         return self._batch_size * self._batch_num
 
-    """
-    Gets the image data, metadata and parameters associated with the index.
-
-    Parameters
-    ----------
-
-    i : int
-        The index of the image
-
-    Returns
-    -------
-    tuple[`torch.Tensor`, list(dict), dict]
-        The image data, metadata and simulation parameters for this index.
-
-    """
-
     def __getitem__(self, i: int):
+        """
+        Gets the image data, metadata and parameters associated with the index.
+
+        Parameters
+        ----------
+
+        i : int
+            The index of the image
+
+        Returns
+        -------
+        tuple[`torch.Tensor`, list(dict), dict]
+            The image data, metadata and simulation parameters for this index.
+
+        """
         idx = self._get_batch_indices(i)
         return self.get_image(idx[0], idx[1])
 
-    """
-    Gets the image data, metadata and parameters associated with the index.
-
-    Parameters
-    ----------
-
-    batch_idx : int
-        The index of the batch
-
-    in_batch_idx : int
-        The index of the image inside the batch
-
-    Returns
-    -------
-    tuple[`torch.Tensor`, list(dict), dict]
-        The image data, metadata and simulation parameters for these indices.
-
-    """
-
     def get_image(self, batch_idx: int, in_batch_idx: int):
+        """
+        Gets the image data, metadata and parameters associated with the index.
+
+        Parameters
+        ----------
+
+        batch_idx : int
+            The index of the batch
+
+        in_batch_idx : int
+            The index of the image inside the batch
+
+        Returns
+        -------
+        tuple[`torch.Tensor`, list(dict), dict]
+            The image data, metadata and simulation parameters for these indices.
+
+        """
         if self._cache is not None:
             cached_data = self._cache[batch_idx, in_batch_idx]
             if cached_data is not None:
@@ -351,32 +347,31 @@ class Dataset:
             if self._cache is not None:
                 self._cache.add(batch_idx, data)
 
-            return (data[0][in_batch_idx], data[1][in_batch_idx], data[2])
-
-    """
-    Plots the images contained in the dataset.
-
-    Parameters
-    ----------
-
-    idx : tuple or array_like, optional
-        The slice of indices of images in the dataset to be plotted
-        (e.g. [0, -1] will plot every image except the last one).
-        An index with value `None` denotes the last possible index
-        (e.g. [None, None] will only plot the last image in the set).
-
-    norm : norm from :class:`matplotlib.colors`, optional
-        The norm to be applied to the images.
-
-    fig : matplotlib.figure.Figure, optional
-        A figure to put the plot into
-
-    ax : matplotlib.axes._axes.Axes, optional
-        A axis to put the plot into
-
-    """
+            return (data[0][in_batch_idx], data[1][in_batch_idx], data[2]) 
 
     def plot_models(self, idx: tuple[int, int] = [0, 6], norm=None, fig=None, ax=None):
+        """
+        Plots the images contained in the dataset.
+
+        Parameters
+        ----------
+
+        idx : tuple or array_like, optional
+            The slice of indices of images in the dataset to be plotted
+            (e.g. [0, -1] will plot every image except the last one).
+            An index with value `None` denotes the last possible index
+            (e.g. [None, None] will only plot the last image in the set).
+
+        norm : norm from :class:`matplotlib.colors`, optional
+            The norm to be applied to the images.
+
+        fig : matplotlib.figure.Figure, optional
+            A figure to put the plot into
+
+        ax : matplotlib.axes._axes.Axes, optional
+            A axis to put the plot into
+
+        """
         if None in (fig, ax) and not all(x is None for x in (fig, ax)):
             raise KeyError(
                 "The parameters ax and fig have to be both None or not None!"
