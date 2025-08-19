@@ -1268,7 +1268,7 @@ class Simulation:
 
 class Skymodel:
     """
-    The skymodel class for radiointerferometic simulations
+    The skymodel class for radiointerferometic simulations.
     """
 
     def __init__(self, path, source_name, cleaned_path=None):
@@ -1345,7 +1345,14 @@ class Skymodel:
         Get the image data of the uncleaned skymodel
         """
 
-        return fits.open(self.original_path)[0].data[0]
+        f = fits.open(self.original_path)[0]
+
+        model = f.data[0, 0]
+
+        if f.header["CDELT1"] < 0:
+            model = model[:, ::-1]
+
+        return model
 
     def _get_filename(self):
         """
@@ -1405,7 +1412,7 @@ class Skymodel:
             return self
 
         f = fits.open(self.original_path)
-        skymodel = f[0].data[0, 0]
+        skymodel = self.get_original_model()
 
         skymodel_cleaned = rms_cut(skymodel, **rms_cut_args)
         skymodel_cleaned = dbscan_clean(skymodel_cleaned, **dbscan_args)
@@ -1437,6 +1444,8 @@ class Skymodel:
 
         if not flux_per_beam:
             header["BUNIT"] = "Jy/pix "
+
+        header["CDELT1"] = np.abs(header["CDELT1"])
 
         f[0].writeto(cleaned_path, overwrite=overwrite)
 
@@ -1599,7 +1608,7 @@ class Skymodel:
         """
 
         f = fits.open(self.original_path)[0]
-        skymodel = f.data[0, 0]
+        skymodel = self.get_original_model()
 
         if None in (fig, ax) and not all(x is None for x in (fig, ax)):
             raise KeyError(
